@@ -32,7 +32,7 @@ def leer_excel(file):
     ws   = next((wb[s] for s in wb.sheetnames if "cash" in s.lower()), wb.active)
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
-        raise ValueError("El archivo parece estar vacío.")
+        raise ValueError("The file appears to be empty.")
 
     hdrs = [str(h or "").strip().lower() for h in rows[0]]
 
@@ -141,11 +141,11 @@ def generar_pdf(rows, year, month):
         return tbl
 
     # Página 1: Ledger
-    story.append(banner("LCC — Cash Ledger (Cuba)", f"Período: {periodo}"))
+    story.append(banner("LCC — Cash Ledger (Cuba)", f"Period: {periodo}"))
     story.append(Spacer(1, 8))
 
     strip = Table([
-        [Paragraph("Total gastos USD", sm_s), Paragraph("Transacciones", sm_s)],
+        [Paragraph("Total Expenses (USD)", sm_s), Paragraph("Transactions", sm_s)],
         [Paragraph(f'<font color="#a32d2d"><b>{_fmt(total)}</b></font>', styles["Normal"]),
          Paragraph(f"<b>{len(rows)}</b>", styles["Normal"])],
     ], colWidths=["50%","50%"])
@@ -159,9 +159,9 @@ def generar_pdf(rows, year, month):
     ]))
     story.append(strip)
     story.append(Spacer(1, 8))
-    story.append(Paragraph("TRANSACCIONES", h_s))
+    story.append(Paragraph("TRANSACTIONS", h_s))
 
-    heads = ["Fecha", "Propiedad", "Categoría", "Descripción", "Mon.", "Monto Local", "USD"]
+    heads = ["Date", "Property", "Category", "Description", "Cur.", "Local Amount", "USD"]
     col_w = [0.7*inch, 0.85*inch, 1.0*inch, 2.6*inch, 0.38*inch, 0.8*inch, 0.67*inch]
     tx = [heads] + [[
         _fecha(r), _prop(r["prop"])[:12], r["cat"][:20], r["desc"][:35],
@@ -196,14 +196,14 @@ def generar_pdf(rows, year, month):
 
     # Página 2: Aprobación
     story.append(PageBreak())
-    story.append(banner("LCC — Aprobación de Cash Ledger", f"Período: {periodo}", "65%", "35%"))
+    story.append(banner("LCC — Cash Ledger Approval", f"Period: {periodo}", "65%", "35%"))
     story.append(Spacer(1, 20))
-    story.append(Paragraph("RESUMEN", h_s))
+    story.append(Paragraph("SUMMARY", h_s))
 
     recap = Table([
-        ["Período",             periodo],
-        ["Total gastos USD",    _fmt(total)],
-        ["N° transacciones",    str(len(rows))],
+        ["Period",              periodo],
+        ["Total Expenses (USD)", _fmt(total)],
+        ["No. of Transactions",  str(len(rows))],
     ], colWidths=[3*inch, 2*inch])
     recap.setStyle(TableStyle([
         ("FONTNAME",      (0,0),(-1,-1), "Helvetica"),
@@ -216,20 +216,20 @@ def generar_pdf(rows, year, month):
     ]))
     story.append(recap)
     story.append(Spacer(1, 28))
-    story.append(Paragraph("APROBACIÓN", h_s))
+    story.append(Paragraph("APPROVAL", h_s))
     story.append(Paragraph(
         f"Reviewed and approved. I confirm the transactions recorded in this Cash Ledger for <b>{periodo}</b> are accurate and complete.",
         b_s))
     story.append(Spacer(1, 36))
 
     sig = Table([
-        [Paragraph("<b>Aprobado por:</b>", b_s), ""],
+        [Paragraph("<b>Approved by:</b>", b_s), ""],
         [Spacer(1,6), ""],
-        [Paragraph("Nombre:&nbsp;&nbsp;&nbsp;<b>Rolando</b>", b_s), ""],
+        [Paragraph("Name:&nbsp;&nbsp;&nbsp;<b>Rolando</b>", b_s), ""],
         [Spacer(1,14), ""],
-        [Paragraph("Firma:", b_s), ""],
+        [Paragraph("Signature:", b_s), ""],
         [Spacer(1,22), ""],
-        [Paragraph("Fecha:", b_s), ""],
+        [Paragraph("Date:", b_s), ""],
     ], colWidths=[3.5*inch, 3*inch])
     sig.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), GBGD),
@@ -246,7 +246,7 @@ def generar_pdf(rows, year, month):
     story.append(sig)
     story.append(Spacer(1, 40))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GBRD, spaceAfter=6))
-    story.append(Paragraph(f"Generado: {datetime.now().strftime('%B %d, %Y')}", sm_s))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", sm_s))
 
     doc.build(story)
     buf.seek(0)
@@ -266,7 +266,7 @@ def generar_excel(rows, year, month):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Gastos {mes_str}"
+    ws.title = f"Expenses {mes_str}"
 
     dark_fill  = PatternFill("solid", fgColor="1A1A2E")
     gray_fill  = PatternFill("solid", fgColor="F5F5F5")
@@ -291,19 +291,19 @@ def generar_excel(rows, year, month):
     right  = Alignment(horizontal="right",  vertical="center")
 
     ws.merge_cells("A1:G1")
-    ws["A1"] = f"LCC — Cash Ledger (Cuba)   |   Período: {periodo}"
+    ws["A1"] = f"LCC — Cash Ledger (Cuba)   |   Period: {periodo}"
     ws["A1"].font = white_bold
     ws["A1"].fill = dark_fill
     ws["A1"].alignment = center
     ws.row_dimensions[1].height = 22
 
     ws.merge_cells("A2:G2")
-    ws["A2"] = "Verificación de gastos — para revisión de Rolando"
+    ws["A2"] = "Expense review — for Rolando's approval"
     ws["A2"].font = Font(name="Arial", size=9, color="888888", italic=True)
     ws["A2"].alignment = center
     ws.row_dimensions[2].height = 16
 
-    heads = ["Fecha", "Propiedad", "Categoría", "Descripción", "Moneda", "Monto Local", "USD"]
+    heads = ["Date", "Property", "Category", "Description", "Currency", "Local Amount", "USD"]
     col_widths = [12, 14, 20, 48, 8, 15, 13]
     for i, h in enumerate(heads, 1):
         c = ws.cell(row=3, column=i, value=h)
@@ -362,7 +362,7 @@ def generar_excel(rows, year, month):
     ws.freeze_panes = "A4"
 
     # Hoja aprobación
-    wa = wb.create_sheet("Aprobación")
+    wa = wb.create_sheet("Approval")
     wa.column_dimensions["A"].width = 28
     wa.column_dimensions["B"].width = 22
 
@@ -377,15 +377,15 @@ def generar_excel(rows, year, month):
         return c
 
     wa.row_dimensions[1].height = 28
-    wa_cell(1, 1, f"LCC — Aprobación de Cash Ledger   |   {periodo}",
+    wa_cell(1, 1, f"LCC — Cash Ledger Approval   |   {periodo}",
             font=Font(name="Arial", bold=True, color="FFFFFF", size=13),
             fill=dark_fill, align=center, merge_to=2)
     wa.row_dimensions[2].height = 10
 
     for row, label, val, is_usd in [
-        (3, "Período",            periodo,    False),
-        (4, "Total gastos USD",   total_usd,  True),
-        (5, "N° transacciones",   len(rows),  False),
+        (3, "Period",               periodo,    False),
+        (4, "Total Expenses (USD)", total_usd,  True),
+        (5, "No. of Transactions",  len(rows),  False),
     ]:
         wa.row_dimensions[row].height = 18
         wa_cell(row, 1, label,
@@ -407,10 +407,10 @@ def generar_excel(rows, year, month):
     wa.row_dimensions[8].height = 14
 
     for row, label, val in [
-        (9,  "Aprobado por:", ""),
-        (10, "Nombre:",       "Rolando"),
-        (11, "Firma:",        ""),
-        (12, "Fecha:",        ""),
+        (9,  "Approved by:", ""),
+        (10, "Name:",          "Rolando"),
+        (11, "Signature:",    ""),
+        (12, "Date:",         ""),
     ]:
         wa.row_dimensions[row].height = 22
         wa_cell(row, 1, label,
@@ -439,10 +439,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("## 📊 Cash Ledger — LCC Cuba")
-st.markdown("Subí el Excel, seleccioná el mes y descargá el PDF o Excel de revisión.")
+st.markdown("Upload the Cash Ledger, select a month, and download the PDF or Excel for review.")
 st.divider()
 
-uploaded = st.file_uploader("Subir Cash Ledger (.xlsx)", type=["xlsx"])
+uploaded = st.file_uploader("Upload Cash Ledger (.xlsx)", type=["xlsx"])
 
 if uploaded:
     try:
@@ -450,40 +450,40 @@ if uploaded:
         grupos = agrupar(data)
 
         if not grupos:
-            st.error("No se encontraron transacciones en el archivo.")
+            st.error("No transactions found in the file.")
         else:
             meses_disponibles = sorted(grupos.keys())
             opciones = {f"{MESES[m]} {y}": (y, m) for (y, m) in meses_disponibles}
 
-            mes_sel = st.selectbox("Seleccionar mes", list(opciones.keys()))
+            mes_sel = st.selectbox("Select month", list(opciones.keys()))
             year, month = opciones[mes_sel]
             rows = grupos[(year, month)]
             total = sum(float(r["usd"] or 0) for r in rows)
 
             col1, col2, col3 = st.columns(3)
-            col1.metric("Transacciones", len(rows))
+            col1.metric("Transactions", len(rows))
             col2.metric("Total USD", f"${total:,.2f}")
-            col3.metric("Mes", MESES[month])
+            col3.metric("Month", MESES[month])
 
             st.divider()
 
             # Preview tabla
-            with st.expander("Ver transacciones", expanded=True):
+            with st.expander("View transactions", expanded=True):
                 preview = []
                 for r in rows:
                     preview.append({
-                        "Fecha":       _fecha(r),
-                        "Propiedad":   _prop(r["prop"]),
-                        "Categoría":   r["cat"],
-                        "Descripción": r["desc"],
-                        "Moneda":      r["cur"],
-                        "Monto Local": fmt_local(r),
+                        "Date":         _fecha(r),
+                        "Property":     _prop(r["prop"]),
+                        "Category":     r["cat"],
+                        "Description":  r["desc"],
+                        "Currency":     r["cur"],
+                        "Local Amount": fmt_local(r),
                         "USD":         f'${float(r["usd"] or 0):,.2f}',
                     })
                 st.dataframe(preview, use_container_width=True, hide_index=True)
 
             st.divider()
-            st.markdown("**Descargar archivos**")
+            st.markdown("**Download files**")
 
             col_pdf, col_xlsx = st.columns(2)
             mes_str = MESES[month]
@@ -491,7 +491,7 @@ if uploaded:
             with col_pdf:
                 pdf_buf = generar_pdf(rows, year, month)
                 st.download_button(
-                    label="📄 Descargar PDF",
+                    label="📄 Download PDF",
                     data=pdf_buf,
                     file_name=f"CashLedger_{mes_str}{year}_Cuba.pdf",
                     mime="application/pdf",
@@ -501,7 +501,7 @@ if uploaded:
             with col_xlsx:
                 xl_buf = generar_excel(rows, year, month)
                 st.download_button(
-                    label="📊 Descargar Excel",
+                    label="📊 Download Excel",
                     data=xl_buf,
                     file_name=f"CashLedger_{mes_str}{year}_Cuba_Revision.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -509,7 +509,7 @@ if uploaded:
                 )
 
     except Exception as e:
-        st.error(f"Error leyendo el archivo: {e}")
+        st.error(f"Error reading the file: {e}")
 
 else:
-    st.info("Subí el archivo Excel para comenzar.")
+    st.info("Upload the Excel file to get started.")
