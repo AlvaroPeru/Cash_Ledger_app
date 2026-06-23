@@ -162,7 +162,7 @@ def generar_pdf(rows, year, month):
     story.append(Paragraph("TRANSACCIONES", h_s))
 
     heads = ["Fecha", "Propiedad", "Categoría", "Descripción", "Mon.", "Monto Local", "USD"]
-    col_w = [0.7*inch, 0.85*inch, 1.05*inch, 2.1*inch, 0.38*inch, 0.9*inch, 0.72*inch]
+    col_w = [0.7*inch, 0.85*inch, 1.0*inch, 2.6*inch, 0.38*inch, 0.8*inch, 0.67*inch]
     tx = [heads] + [[
         _fecha(r), _prop(r["prop"])[:12], r["cat"][:20], r["desc"][:35],
         r["cur"], fmt_local(r), f'${float(r["usd"] or 0):,.2f}',
@@ -218,8 +218,7 @@ def generar_pdf(rows, year, month):
     story.append(Spacer(1, 28))
     story.append(Paragraph("APROBACIÓN", h_s))
     story.append(Paragraph(
-        f"He revisado el Cash Ledger del período <b>{periodo}</b> y confirmo que "
-        "las transacciones registradas son completas y han sido correctamente documentadas.",
+        f"Reviewed and approved. I confirm the transactions recorded in this Cash Ledger for <b>{periodo}</b> are accurate and complete.",
         b_s))
     story.append(Spacer(1, 36))
 
@@ -305,7 +304,7 @@ def generar_excel(rows, year, month):
     ws.row_dimensions[2].height = 16
 
     heads = ["Fecha", "Propiedad", "Categoría", "Descripción", "Moneda", "Monto Local", "USD"]
-    col_widths = [12, 14, 20, 38, 8, 15, 13]
+    col_widths = [12, 14, 20, 48, 8, 15, 13]
     for i, h in enumerate(heads, 1):
         c = ws.cell(row=3, column=i, value=h)
         c.font = white_bold
@@ -401,7 +400,7 @@ def generar_excel(rows, year, month):
     wa.row_dimensions[6].height = 20
     wa.merge_cells("A7:B7")
     wa_cell(7, 1,
-            f"He revisado el Cash Ledger del período {periodo} y confirmo que los gastos son correctos.",
+            f"Reviewed and approved. I confirm the transactions recorded in this Cash Ledger for {periodo} are accurate and complete.",
             font=Font(name="Arial", size=10, italic=True, color="333333"),
             align=Alignment(wrap_text=True, vertical="center"))
     wa.row_dimensions[7].height = 32
