@@ -162,10 +162,10 @@ def generar_pdf(rows, year, month):
     story.append(Spacer(1, 8))
     story.append(Paragraph("TRANSACTIONS", h_s))
 
-    heads = ["Date", "Property", "Category", "Description", "Cur.", "Local Amount", "USD"]
-    col_w = [0.7*inch, 0.85*inch, 1.0*inch, 2.6*inch, 0.38*inch, 0.8*inch, 0.67*inch]
+    heads = ["Date", "Prop.", "Category", "Description", "Cur.", "Local Amount", "USD"]
+    col_w = [0.7*inch, 0.55*inch, 1.0*inch, 2.9*inch, 0.38*inch, 0.8*inch, 0.67*inch]
     tx = [heads] + [[
-        _fecha(r), _prop(r["prop"])[:10], r["cat"][:16], r["desc"][:52],
+        _fecha(r), _prop(r["prop"])[:6],  r["cat"][:16], r["desc"][:60],
         r["cur"], fmt_local(r), f'${float(r["usd"] or 0):,.2f}',
     ] for r in rows]
 
