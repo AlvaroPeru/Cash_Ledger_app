@@ -493,7 +493,7 @@ if uploaded:
                 st.download_button(
                     label="📄 Download PDF",
                     data=pdf_buf,
-                    file_name=f"CashLedger_{mes_str}{year}_Cuba.pdf",
+                    file_name=f"SS_CashLedger_Cuba_{mes_str}{year}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                 )
@@ -503,7 +503,7 @@ if uploaded:
                 st.download_button(
                     label="📊 Download Excel",
                     data=xl_buf,
-                    file_name=f"CashLedger_{mes_str}{year}_Cuba_Revision.xlsx",
+                    file_name=f"SS_CashLedger_Cuba_{mes_str}{year}_{datetime.now().strftime('%Y%m%d_%H%M')}_Review.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                 )
