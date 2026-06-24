@@ -614,9 +614,8 @@ if uploaded_files:
 
             tz      = pytz.timezone("America/Toronto")
             ts      = datetime.now(tz).strftime("%Y%m%d_%H%M")
-            names   = "_".join(n for n, _ in sources)
             mes_str = MONTHS[month]
-            base    = f"SS_CashLedger_Cuba_{mes_str}{year}_{names}_{ts}"
+            base    = f"SS_CashLedger_Cuba_{mes_str}{year}_{ts}"
 
             col_pdf, col_xlsx = st.columns(2)
 
