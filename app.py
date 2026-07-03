@@ -68,6 +68,13 @@ def leer_excel(file):
     if not rows:
         raise ValueError("The file appears to be empty.")
 
+    # Find header row dynamically (handles metadata rows at top)
+    header_idx = 0
+    for i, r in enumerate(rows):
+        if any(str(c or "").strip().lower() in ("year","month","date","description") for c in r):
+            header_idx = i
+            break
+    rows = rows[header_idx:]
     hdrs = [str(h or "").strip().lower() for h in rows[0]]
 
     def col(name):
@@ -241,16 +248,13 @@ def generar_pdf(sources, year, month):
     story.append(Spacer(1, 8))
 
     # Summary strip
-    names_str = " + ".join(name for name, _ in sources)
     strip_data = [
         [Paragraph("Total Expenses (USD)", sm_s),
-         Paragraph("Transactions", sm_s),
-         Paragraph("Sources", sm_s)],
+         Paragraph("Transactions", sm_s)],
         [Paragraph(f'<font color="#a32d2d"><b>{_fmt(grand_total)}</b></font>', styles["Normal"]),
-         Paragraph(f"<b>{len(all_rows)}</b>", styles["Normal"]),
-         Paragraph(f"<b>{names_str}</b>", styles["Normal"])],
+         Paragraph(f"<b>{len(all_rows)}</b>", styles["Normal"])],
     ]
-    strip = Table(strip_data, colWidths=["33%","20%","47%"])
+    strip = Table(strip_data, colWidths=["50%","50%"])
     strip.setStyle(TableStyle([
         ("BACKGROUND",   (0,0),(-1,-1), GBGD),
         ("GRID",         (0,0),(-1,-1), 0.3, GBRD),
@@ -261,19 +265,15 @@ def generar_pdf(sources, year, month):
     ]))
     story.append(strip)
 
-    # Per-person sections
-    for name, rows in sources:
-        subtotal = sum(float(r["usd"] or 0) for r in rows)
-        story.append(Spacer(1, 12))
-        story.append(person_banner(name, len(rows), subtotal))
-        story.append(Spacer(1, 4))
-        story.append(tx_table(rows))
-        story.append(subtotal_row(name, rows, styles))
-
-    # Grand total
+    # Transactions
     story.append(Spacer(1, 8))
+    story.append(Paragraph("TRANSACTIONS", h_s))
+    story.append(tx_table(all_rows))
+
+    # Total
+    story.append(Spacer(1, 6))
     gt = Table([[
-        Paragraph("GRAND TOTAL:", ParagraphStyle("gt", parent=styles["Normal"],
+        Paragraph("TOTAL:", ParagraphStyle("gt", parent=styles["Normal"],
                   fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)),
         Paragraph(f"${grand_total:,.2f}", ParagraphStyle("gtv", parent=styles["Normal"],
                   fontSize=11, fontName="Helvetica-Bold", textColor=colors.white)),
@@ -294,27 +294,24 @@ def generar_pdf(sources, year, month):
     story.append(Spacer(1, 20))
     story.append(Paragraph("SUMMARY", h_s))
 
-    recap_data = [["Period", periodo], ["Sources", names_str]]
-    for name, rows in sources:
-        sub = sum(float(r["usd"] or 0) for r in rows)
-        recap_data.append([f"  Subtotal {name}", _fmt(sub)])
-    recap_data.append(["Grand Total (USD)", _fmt(grand_total)])
-    recap_data.append(["No. of Transactions", str(len(all_rows))])
+    recap_data = [
+        ["Period",              periodo],
+        ["Total Expenses (USD)", _fmt(grand_total)],
+        ["No. of Transactions", str(len(all_rows))],
+    ]
 
     recap = Table(recap_data, colWidths=[3*inch, 2.5*inch])
-    recap_style = [
+    recap.setStyle(TableStyle([
         ("FONTNAME",      (0,0),(-1,-1), "Helvetica"),
         ("FONTNAME",      (0,0),(0,-1),  "Helvetica-Bold"),
         ("FONTSIZE",      (0,0),(-1,-1), 10),
         ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
         ("TOPPADDING",    (0,0),(-1,-1), 5),
         ("BOTTOMPADDING", (0,0),(-1,-1), 5),
-        ("LINEABOVE",     (0, len(recap_data)-2), (-1, len(recap_data)-2), 1, DARK),
-        ("FONTNAME",      (0, len(recap_data)-2), (-1,-1), "Helvetica-Bold"),
-        ("TEXTCOLOR",     (1, len(recap_data)-2), (1,-1), RED),
+        ("TEXTCOLOR",     (1,1),(1,1),   RED),
+        ("FONTNAME",      (0,1),(-1,1),  "Helvetica-Bold"),
         ("LINEBELOW",     (0,-1),(-1,-1), 1, DARK),
-    ]
-    recap.setStyle(TableStyle(recap_style))
+    ]))
     story.append(recap)
     story.append(Spacer(1, 28))
 
@@ -537,81 +534,48 @@ st.set_page_config(page_title="Cash Ledger LCC", page_icon="📊", layout="cente
 st.markdown("<style>.block-container { max-width: 780px; }</style>", unsafe_allow_html=True)
 
 st.markdown("## 📊 Cash Ledger — LCC Cuba")
-st.markdown("Upload one or more Excel files, select a month, and download the consolidated PDF or Excel for Rolando's review.")
+st.markdown("Upload the Excel file, select a month, and download the PDF or Excel for Rolando's review.")
 st.divider()
 
-uploaded_files = st.file_uploader(
-    "Upload Cash Ledger files (.xlsx)",
-    type=["xlsx"],
-    accept_multiple_files=True
-)
+uploaded_file = st.file_uploader("Upload Cash Ledger (.xlsx)", type=["xlsx"])
 
-if uploaded_files:
-    # Load all files
-    all_sources = {}  # name -> data
-    errors = []
-    for f in uploaded_files:
-        try:
-            name = extract_name(f.name)
-            data = leer_excel(f)
-            all_sources[name] = agrupar(data)
-        except Exception as e:
-            errors.append(f"{f.name}: {e}")
+if uploaded_file:
+    try:
+        data   = leer_excel(uploaded_file)
+        grupos = agrupar(data)
 
-    if errors:
-        for e in errors:
-            st.error(f"Error reading {e}")
-
-    if all_sources:
-        # Find common available months across all files
-        all_month_keys = set()
-        for grupos in all_sources.values():
-            all_month_keys.update(grupos.keys())
-        all_month_keys = sorted(all_month_keys)
-
-        opciones = {f"{MONTHS[m]} {y}": (y, m) for (y, m) in all_month_keys}
-        mes_sel  = st.selectbox("Select month", list(opciones.keys()))
-        year, month = opciones[mes_sel]
-
-        # Build sources for selected month
-        sources = []
-        for name, grupos in all_sources.items():
-            if (year, month) in grupos:
-                sources.append((name, grupos[(year, month)]))
-
-        if not sources:
-            st.warning("No transactions found for this month in the uploaded files.")
+        if not grupos:
+            st.error("No transactions found in the file.")
         else:
-            all_rows    = [r for _, rows in sources for r in rows]
-            grand_total = sum(float(r["usd"] or 0) for r in all_rows)
+            opciones = {f"{MONTHS[m]} {y}": (y, m) for (y, m) in sorted(grupos.keys())}
+            mes_sel  = st.selectbox("Select month", list(opciones.keys()))
+            year, month = opciones[mes_sel]
+            rows = grupos[(year, month)]
+            total = sum(float(r["usd"] or 0) for r in rows)
 
-            # Metrics
-            cols = st.columns(len(sources) + 2)
-            cols[0].metric("Grand Total (USD)", f"${grand_total:,.2f}")
-            cols[1].metric("Transactions", len(all_rows))
-            for i, (name, rows) in enumerate(sources):
-                sub = sum(float(r["usd"] or 0) for r in rows)
-                cols[i+2].metric(f"{name}", f"${sub:,.2f}")
+            col1, col2 = st.columns(2)
+            col1.metric("Total Expenses (USD)", f"${total:,.2f}")
+            col2.metric("Transactions", len(rows))
 
             st.divider()
 
-            # Preview per person
-            for name, rows in sources:
-                with st.expander(f"📋 {name} — {len(rows)} transactions", expanded=True):
-                    preview = [{
-                        "Date":         _fecha(r),
-                        "Property":     _prop(r["prop"]),
-                        "Category":     r["cat"],
-                        "Description":  r["desc"],
-                        "Currency":     r["cur"],
-                        "Local Amount": fmt_local(r),
-                        "USD":          f'${float(r["usd"] or 0):,.2f}',
-                    } for r in rows]
-                    st.dataframe(preview, use_container_width=True, hide_index=True)
+            with st.expander("View transactions", expanded=True):
+                preview = [{
+                    "Date":         _fecha(r),
+                    "Property":     _prop(r["prop"]),
+                    "Category":     r["cat"],
+                    "Description":  r["desc"],
+                    "Currency":     r["cur"],
+                    "Local Amount": fmt_local(r),
+                    "USD":          f'${float(r["usd"] or 0):,.2f}',
+                } for r in rows]
+                st.dataframe(preview, use_container_width=True, hide_index=True)
 
             st.divider()
             st.markdown("**Download files**")
 
+            # Single source — pass as list for PDF/Excel generators
+            sources = [("Cuba", rows)]
             tz      = pytz.timezone("America/Toronto")
             ts      = datetime.now(tz).strftime("%Y%m%d_%H%M")
             mes_str = MONTHS[month]
@@ -639,5 +603,8 @@ if uploaded_files:
                     use_container_width=True,
                 )
 
+    except Exception as e:
+        st.error(f"Error reading the file: {e}")
+
 else:
-    st.info("Upload one or more Excel files to get started.")
+    st.info("Upload the Excel file to get started.")
