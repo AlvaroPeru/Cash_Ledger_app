@@ -325,7 +325,7 @@ def generar_pdf(sources, year, month):
     sig = Table([
         [Paragraph("<b>Approved by:</b>", b_s), ""],
         [Spacer(1,6), ""],
-        [Paragraph("Name:&nbsp;&nbsp;&nbsp;<b>Rolando</b>", b_s), ""],
+        [Paragraph("Name:", b_s), ""],
         [Spacer(1,14), ""],
         [Paragraph("Signature:", b_s), ""],
         [Spacer(1,22), ""],
@@ -512,7 +512,7 @@ def generar_excel(sources, year, month):
     wc.row_dimensions[row].height = 32
     row += 2
 
-    for label, val in [("Approved by:", ""), ("Name:", "Rolando"), ("Signature:", ""), ("Date:", "")]:
+    for label, val in [("Approved by:", ""), ("Name:", ""), ("Signature:", ""), ("Date:", "")]:
         wc.row_dimensions[row].height = 22
         wc.cell(row=row, column=1, value=label).font = Font(name="Arial", bold=True, size=10)
         wc.cell(row=row, column=1).fill = gray2_fill
