@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table,
-    TableStyle, PageBreak, HRFlowable, KeepTogether
+    TableStyle, PageBreak, HRFlowable
 )
 
 MONTHS = {
@@ -18,6 +18,9 @@ MONTHS = {
     5:"May",     6:"June",     7:"July",  8:"August",
     9:"September",10:"October",11:"November",12:"December"
 }
+
+INCOME_TYPES  = {"cash income", "funding"}
+EXPENSE_TYPES = {"expense", "return cash"}
 
 DARK  = colors.HexColor("#1a1a2e")
 GBGD  = colors.HexColor("#f5f5f5")
@@ -48,27 +51,22 @@ def fmt_local(r):
     except:
         return ""
 
-def extract_name(filename):
-    """Extract person name from filename e.g. Cash_Ledger_Leonard.xlsx -> Leonard"""
-    name = os.path.splitext(filename)[0]
-    parts = name.replace("-","_").split("_")
-    # Return last meaningful part (capitalized)
-    for part in reversed(parts):
-        if len(part) > 2 and part.lower() not in ("cash","ledger","v1","copia","cuba","lcc"):
-            return part.capitalize()
-    return name.capitalize()
+def is_income(r):
+    return str(r.get("type","")).strip().lower() in INCOME_TYPES
+
+def is_expense(r):
+    return str(r.get("type","")).strip().lower() in EXPENSE_TYPES
 
 
 # ─── LECTURA ────────────────────────────────
 
 def leer_excel(file):
-    wb   = openpyxl.load_workbook(file, data_only=True)
-    ws   = next((wb[s] for s in wb.sheetnames if "cash" in s.lower()), wb.active)
+    wb = openpyxl.load_workbook(file, data_only=True)
+    ws = next((wb[s] for s in wb.sheetnames if "cash" in s.lower()), wb.active)
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         raise ValueError("The file appears to be empty.")
 
-    # Find header row dynamically (handles metadata rows at top)
     header_idx = 0
     for i, r in enumerate(rows):
         if any(str(c or "").strip().lower() in ("year","month","date","description") for c in r):
@@ -87,7 +85,8 @@ def leer_excel(file):
         year=col("year"), month=col("month"), day=col("day"),
         desc=col("description"), local=col("local amount"),
         usd=col("usd amount"), bal=col("running balance"),
-        cat=col("category"), cur=col("currency"), prop=col("property"),
+        cat=col("category"), cur=col("currency"),
+        prop=col("property"), type=col("type"),
     )
 
     data = []
@@ -111,6 +110,7 @@ def leer_excel(file):
             "cat":   str(r[ci["cat"]]   or "").strip() if ci["cat"]   is not None else "",
             "cur":   str(r[ci["cur"]]   or "").strip() if ci["cur"]   is not None else "",
             "prop":  str(r[ci["prop"]]  or "").strip() if ci["prop"]  is not None else "",
+            "type":  str(r[ci["type"]]  or "").strip() if ci["type"]  is not None else "",
         })
     return data
 
@@ -123,9 +123,10 @@ def agrupar(data):
     return dict(sorted(g.items()))
 
 
-# ─── TRANSACTION TABLE BUILDER ───────────────
+# ─── TABLE BUILDER ──────────────────────────
 
-def tx_table(rows):
+def make_tx_table(rows, header_color=None):
+    hc = header_color or DARK
     heads = ["Date", "Prop.", "Category", "Description", "Cur.", "Local Amount", "USD"]
     col_w = [0.7*inch, 0.55*inch, 1.0*inch, 2.9*inch, 0.38*inch, 0.8*inch, 0.67*inch]
 
@@ -141,7 +142,7 @@ def tx_table(rows):
 
     t = Table(data, colWidths=col_w, repeatRows=1)
     t.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,0),  DARK),
+        ("BACKGROUND",    (0,0),(-1,0),  hc),
         ("TEXTCOLOR",     (0,0),(-1,0),  colors.white),
         ("FONTNAME",      (0,0),(-1,0),  "Helvetica-Bold"),
         ("FONTSIZE",      (0,0),(-1,0),  7.5),
@@ -166,36 +167,78 @@ def tx_table(rows):
     return t
 
 
-def subtotal_row(name, rows, styles):
-    total = sum(float(r["usd"] or 0) for r in rows)
-    sm = ParagraphStyle("st", parent=styles["Normal"], fontSize=8,
-                        fontName="Helvetica-Bold", textColor=RED)
+def section_banner(label, n_tx, subtotal, color, styles):
+    s = ParagraphStyle("sb", parent=styles["Normal"], fontSize=10,
+                       fontName="Helvetica-Bold", textColor=colors.white)
+    sm = ParagraphStyle("sm2", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#cccccc"))
     tbl = Table([[
-        Paragraph(f"Subtotal {name}:", sm),
-        Paragraph(f"${total:,.2f}", sm),
-    ]], colWidths=[5.5*inch, 1.5*inch])
+        Paragraph(label, s),
+        Paragraph(f"{n_tx} transactions  |  {subtotal}", sm),
+    ]], colWidths=["35%","65%"])
     tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor("#fff5f5")),
+        ("BACKGROUND",    (0,0),(-1,-1), color),
+        ("TOPPADDING",    (0,0),(-1,-1), 7),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 7),
+        ("LEFTPADDING",   (0,0),(0,-1),  12),
+        ("RIGHTPADDING",  (-1,0),(-1,-1),12),
+        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+        ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
+    ]))
+    return tbl
+
+
+def subtotal_bar(label, amount, color, styles):
+    s = ParagraphStyle("stb", parent=styles["Normal"], fontSize=8.5,
+                       fontName="Helvetica-Bold", textColor=color)
+    tbl = Table([[Paragraph(label, s), Paragraph(_fmt(amount), s)]],
+                colWidths=[5.5*inch, 1.5*inch])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor("#f0f0f0")),
         ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
         ("TOPPADDING",    (0,0),(-1,-1), 4),
         ("BOTTOMPADDING", (0,0),(-1,-1), 4),
         ("LEFTPADDING",   (0,0),(0,-1),  8),
         ("RIGHTPADDING",  (-1,0),(-1,-1),8),
-        ("LINEABOVE",     (0,0),(-1,0),  0.5, RED),
+        ("LINEABOVE",     (0,0),(-1,0),  0.5, color),
+    ]))
+    return tbl
+
+
+def net_bar(net, styles):
+    is_pos = net >= 0
+    color  = GREEN if is_pos else RED
+    label  = "NET CASH FLOW (Income − Expenses):"
+    s = ParagraphStyle("net", parent=styles["Normal"], fontSize=10,
+                       fontName="Helvetica-Bold", textColor=colors.white)
+    tbl = Table([[Paragraph(label, s), Paragraph(_fmt(abs(net)) + (" ▲" if is_pos else " ▼"), s)]],
+                colWidths=[5.0*inch, 2.0*inch])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), color),
+        ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
+        ("TOPPADDING",    (0,0),(-1,-1), 7),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 7),
+        ("LEFTPADDING",   (0,0),(0,-1),  10),
+        ("RIGHTPADDING",  (-1,0),(-1,-1),10),
     ]))
     return tbl
 
 
 # ─── GENERADOR PDF ──────────────────────────
 
-def generar_pdf(sources, year, month):
-    """
-    sources: list of (name, rows)
-    """
-    mes_str = MONTHS.get(month, str(month))
-    periodo = f"{mes_str} {year}"
-    all_rows = [r for _, rows in sources for r in rows]
-    grand_total = sum(float(r["usd"] or 0) for r in all_rows)
+def generar_pdf(rows_by_month, selected_months, year):
+    all_rows    = [r for rows in rows_by_month.values() for r in rows]
+    income_rows = [r for r in all_rows if is_income(r)]
+    expense_rows= [r for r in all_rows if is_expense(r)]
+    total_in    = sum(float(r["usd"] or 0) for r in income_rows)
+    total_exp   = sum(float(r["usd"] or 0) for r in expense_rows)
+    net         = total_in - total_exp
+
+    if len(selected_months) == 1:
+        m = selected_months[0]
+        periodo = f"{MONTHS[m]} {year}"
+    else:
+        names = [MONTHS[m] for m in selected_months]
+        periodo = f"{names[0]} – {names[-1]} {year}"
 
     styles = getSampleStyleSheet()
     def S(name, parent="Normal", **kw):
@@ -204,7 +247,6 @@ def generar_pdf(sources, year, month):
     t_s  = S("t",  fontSize=15, fontName="Helvetica-Bold", textColor=colors.white)
     sb_s = S("sb", fontSize=9,  textColor=colors.HexColor("#c0c0cc"))
     h_s  = S("h",  fontSize=8.5,fontName="Helvetica-Bold", textColor=MID, spaceBefore=12, spaceAfter=5)
-    sec_s= S("sec",fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
     b_s  = S("b",  fontSize=10, textColor=colors.HexColor("#222222"), leading=16)
     sm_s = S("sm", fontSize=7.5,textColor=MID)
 
@@ -227,66 +269,50 @@ def generar_pdf(sources, year, month):
         ]))
         return tbl
 
-    def person_banner(name, n_tx, subtotal):
-        tbl = Table([[
-            Paragraph(name.upper(), sec_s),
-            Paragraph(f"{n_tx} transactions  |  Subtotal: ${subtotal:,.2f}", sb_s),
-        ]], colWidths=["35%","65%"])
-        tbl.setStyle(TableStyle([
-            ("BACKGROUND",   (0,0),(-1,-1), colors.HexColor("#2d2d4e")),
-            ("TOPPADDING",   (0,0),(-1,-1), 7),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 7),
-            ("LEFTPADDING",  (0,0),(0,-1),  12),
-            ("RIGHTPADDING", (-1,0),(-1,-1),12),
-            ("VALIGN",       (0,0),(-1,-1), "MIDDLE"),
-            ("ALIGN",        (1,0),(1,-1),  "RIGHT"),
-        ]))
-        return tbl
-
     # ── PAGE 1: LEDGER ──────────────────────
     story.append(banner("LCC — Cash Ledger (Cuba)", f"Period: {periodo}"))
     story.append(Spacer(1, 8))
 
     # Summary strip
-    strip_data = [
-        [Paragraph("Total Expenses (USD)", sm_s),
-         Paragraph("Transactions", sm_s)],
-        [Paragraph(f'<font color="#a32d2d"><b>{_fmt(grand_total)}</b></font>', styles["Normal"]),
-         Paragraph(f"<b>{len(all_rows)}</b>", styles["Normal"])],
-    ]
-    strip = Table(strip_data, colWidths=["50%","50%"])
+    strip = Table([
+        [Paragraph("Total Income (USD)", sm_s),
+         Paragraph("Total Expenses (USD)", sm_s),
+         Paragraph("Net Cash Flow", sm_s)],
+        [Paragraph(f'<font color="#0f6e56"><b>{_fmt(total_in)}</b></font>', styles["Normal"]),
+         Paragraph(f'<font color="#a32d2d"><b>{_fmt(total_exp)}</b></font>', styles["Normal"]),
+         Paragraph(f'<font color="{"#0f6e56" if net>=0 else "#a32d2d"}"><b>{_fmt(abs(net))} {"▲" if net>=0 else "▼"}</b></font>', styles["Normal"])],
+    ], colWidths=["33%","33%","34%"])
     strip.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0),(-1,-1), GBGD),
-        ("GRID",         (0,0),(-1,-1), 0.3, GBRD),
-        ("TOPPADDING",   (0,0),(-1,-1), 6),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 6),
-        ("LEFTPADDING",  (0,0),(-1,-1), 10),
-        ("FONTSIZE",     (0,1),(-1,-1), 11),
+        ("BACKGROUND",    (0,0),(-1,-1), GBGD),
+        ("GRID",          (0,0),(-1,-1), 0.3, GBRD),
+        ("TOPPADDING",    (0,0),(-1,-1), 6),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 6),
+        ("LEFTPADDING",   (0,0),(-1,-1), 10),
+        ("FONTSIZE",      (0,1),(-1,-1), 11),
     ]))
     story.append(strip)
 
-    # Transactions
-    story.append(Spacer(1, 8))
-    story.append(Paragraph("TRANSACTIONS", h_s))
-    story.append(tx_table(all_rows))
+    # ── INCOME SECTION ──
+    if income_rows:
+        story.append(Spacer(1, 12))
+        story.append(section_banner("INCOME", len(income_rows), _fmt(total_in),
+                                    colors.HexColor("#0f6e56"), styles))
+        story.append(Spacer(1, 4))
+        story.append(make_tx_table(income_rows, colors.HexColor("#0f6e56")))
+        story.append(subtotal_bar("Total Income:", total_in, GREEN, styles))
 
-    # Total
-    story.append(Spacer(1, 6))
-    gt = Table([[
-        Paragraph("TOTAL:", ParagraphStyle("gt", parent=styles["Normal"],
-                  fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)),
-        Paragraph(f"${grand_total:,.2f}", ParagraphStyle("gtv", parent=styles["Normal"],
-                  fontSize=11, fontName="Helvetica-Bold", textColor=colors.white)),
-    ]], colWidths=[5.5*inch, 1.5*inch])
-    gt.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), DARK),
-        ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
-        ("TOPPADDING",    (0,0),(-1,-1), 6),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 6),
-        ("LEFTPADDING",   (0,0),(0,-1),  8),
-        ("RIGHTPADDING",  (-1,0),(-1,-1),8),
-    ]))
-    story.append(gt)
+    # ── EXPENSES SECTION ──
+    if expense_rows:
+        story.append(Spacer(1, 12))
+        story.append(section_banner("EXPENSES", len(expense_rows), _fmt(total_exp),
+                                    RED, styles))
+        story.append(Spacer(1, 4))
+        story.append(make_tx_table(expense_rows, RED))
+        story.append(subtotal_bar("Total Expenses:", total_exp, RED, styles))
+
+    # ── NET ──
+    story.append(Spacer(1, 10))
+    story.append(net_bar(net, styles))
 
     # ── PAGE 2: APPROVAL ────────────────────
     story.append(PageBreak())
@@ -294,13 +320,13 @@ def generar_pdf(sources, year, month):
     story.append(Spacer(1, 20))
     story.append(Paragraph("SUMMARY", h_s))
 
-    recap_data = [
-        ["Period",              periodo],
-        ["Total Expenses (USD)", _fmt(grand_total)],
-        ["No. of Transactions", str(len(all_rows))],
-    ]
-
-    recap = Table(recap_data, colWidths=[3*inch, 2.5*inch])
+    recap = Table([
+        ["Period",               periodo],
+        ["Total Income (USD)",   _fmt(total_in)],
+        ["Total Expenses (USD)", _fmt(total_exp)],
+        ["Net Cash Flow (USD)",  _fmt(net)],
+        ["No. of Transactions",  str(len(all_rows))],
+    ], colWidths=[3*inch, 2.5*inch])
     recap.setStyle(TableStyle([
         ("FONTNAME",      (0,0),(-1,-1), "Helvetica"),
         ("FONTNAME",      (0,0),(0,-1),  "Helvetica-Bold"),
@@ -308,9 +334,12 @@ def generar_pdf(sources, year, month):
         ("ALIGN",         (1,0),(1,-1),  "RIGHT"),
         ("TOPPADDING",    (0,0),(-1,-1), 5),
         ("BOTTOMPADDING", (0,0),(-1,-1), 5),
-        ("TEXTCOLOR",     (1,1),(1,1),   RED),
-        ("FONTNAME",      (0,1),(-1,1),  "Helvetica-Bold"),
-        ("LINEBELOW",     (0,-1),(-1,-1), 1, DARK),
+        ("TEXTCOLOR",     (1,1),(1,1),   GREEN),
+        ("TEXTCOLOR",     (1,2),(1,2),   RED),
+        ("TEXTCOLOR",     (1,3),(1,3),   GREEN if net >= 0 else RED),
+        ("FONTNAME",      (0,3),(-1,3),  "Helvetica-Bold"),
+        ("LINEABOVE",     (0,3),(-1,3),  1, DARK),
+        ("LINEBELOW",     (0,-1),(-1,-1),1, DARK),
     ]))
     story.append(recap)
     story.append(Spacer(1, 28))
@@ -340,14 +369,14 @@ def generar_pdf(sources, year, month):
         ("BOTTOMPADDING", (0,-1),(1,-1), 14),
         ("TOPPADDING",    (0,1),(-1,-1), 2),
         ("BOTTOMPADDING", (0,1),(-1,-1), 2),
+        ("LINEBELOW",     (0,2),(0,2),   1, DARK),
         ("LINEBELOW",     (0,4),(0,4),   1, DARK),
         ("LINEBELOW",     (0,6),(0,6),   1, DARK),
     ]))
     story.append(sig)
     story.append(Spacer(1, 40))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GBRD, spaceAfter=6))
-    story.append(Paragraph(
-        f"Generated: {datetime.now().strftime('%B %d, %Y')}", sm_s))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", sm_s))
 
     doc.build(story)
     buf.seek(0)
@@ -356,38 +385,46 @@ def generar_pdf(sources, year, month):
 
 # ─── GENERADOR EXCEL ────────────────────────
 
-def generar_excel(sources, year, month):
+def generar_excel(rows_by_month, selected_months, year):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
-    mes_str = MONTHS.get(month, str(month))
-    periodo = f"{mes_str} {year}"
-    all_rows = [r for _, rows in sources for r in rows]
-    grand_total = sum(float(r["usd"] or 0) for r in all_rows)
+    all_rows     = [r for rows in rows_by_month.values() for r in rows]
+    income_rows  = [r for r in all_rows if is_income(r)]
+    expense_rows = [r for r in all_rows if is_expense(r)]
+    total_in     = sum(float(r["usd"] or 0) for r in income_rows)
+    total_exp    = sum(float(r["usd"] or 0) for r in expense_rows)
+    net          = total_in - total_exp
+
+    if len(selected_months) == 1:
+        m = selected_months[0]
+        periodo = f"{MONTHS[m]} {year}"
+    else:
+        names = [MONTHS[m] for m in selected_months]
+        periodo = f"{names[0]} – {names[-1]} {year}"
 
     wb = Workbook()
 
     dark_fill  = PatternFill("solid", fgColor="1A1A2E")
-    sec_fill   = PatternFill("solid", fgColor="2D2D4E")
+    green_fill = PatternFill("solid", fgColor="0F6E56")
+    red_fill   = PatternFill("solid", fgColor="A32D2D")
+    net_fill   = PatternFill("solid", fgColor="0F6E56" if net >= 0 else "A32D2D")
     gray_fill  = PatternFill("solid", fgColor="F5F5F5")
     gray2_fill = PatternFill("solid", fgColor="EBEBEB")
     usd_fill   = PatternFill("solid", fgColor="FFF0F0")
-    sub_fill   = PatternFill("solid", fgColor="FFE8E8")
-    total_fill = PatternFill("solid", fgColor="1A1A2E")
+    inc_fill   = PatternFill("solid", fgColor="F0FFF8")
     white_fill = PatternFill("solid", fgColor="FFFFFF")
 
-    white_bold  = Font(name="Arial", bold=True, color="FFFFFF", size=11)
-    normal      = Font(name="Arial", size=9)
-    mid_font    = Font(name="Arial", size=9, color="888888")
-    usd_font    = Font(name="Arial", bold=True, size=9, color="A32D2D")
-    sub_font    = Font(name="Arial", bold=True, size=9, color="A32D2D")
-    total_font  = Font(name="Arial", bold=True, size=11, color="FFFFFF")
-    sec_font    = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+    white_bold = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+    normal     = Font(name="Arial", size=9)
+    mid_font   = Font(name="Arial", size=9, color="888888")
+    usd_font   = Font(name="Arial", bold=True, size=9, color="A32D2D")
+    inc_font   = Font(name="Arial", bold=True, size=9, color="0F6E56")
+    tot_font   = Font(name="Arial", bold=True, size=10, color="FFFFFF")
 
     thin  = Side(style="thin",   color="DDDDDD")
     med   = Side(style="medium", color="AAAAAA")
-    red_s = Side(style="medium", color="A32D2D")
     bdr   = Border(left=thin, right=thin, top=thin, bottom=thin)
     usd_bdr = Border(left=med, right=thin, top=thin, bottom=thin)
 
@@ -397,41 +434,31 @@ def generar_excel(sources, year, month):
 
     num_usd   = "$#,##0.00"
     num_local = "###,##0.00"
-    col_widths = [12, 10, 20, 48, 10, 16, 13]
+    col_widths = [12, 14, 22, 48, 10, 16, 13]
     heads = ["Date", "Property", "Category", "Description", "Currency", "Local Amount", "USD"]
 
-    # ── Sheet per person ──────────────────────
-    first = True
-    for name, rows in sources:
-        ws = wb.active if first else wb.create_sheet()
-        ws.title = f"{name}"
-        first = False
+    def write_section(ws, section_rows, start_row, section_label, hdr_fill, usd_color, usd_fg):
+        # Section header
+        ws.merge_cells(f"A{start_row}:G{start_row}")
+        c = ws.cell(row=start_row, column=1, value=section_label)
+        c.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        c.fill = hdr_fill; c.alignment = center
+        ws.row_dimensions[start_row].height = 18
+        start_row += 1
 
-        subtotal = sum(float(r["usd"] or 0) for r in rows)
-
-        # Title
-        ws.merge_cells("A1:G1")
-        ws["A1"] = f"LCC — Cash Ledger (Cuba)   |   Period: {periodo}   |   {name}"
-        ws["A1"].font = white_bold
-        ws["A1"].fill = dark_fill
-        ws["A1"].alignment = center
-        ws.row_dimensions[1].height = 22
-
-        ws.merge_cells("A2:G2")
-        ws["A2"] = "Expense review — for Rolando's approval"
-        ws["A2"].font = Font(name="Arial", size=9, color="888888", italic=True)
-        ws["A2"].alignment = center
-        ws.row_dimensions[2].height = 16
-
+        # Column headers
         for i, h in enumerate(heads, 1):
-            c = ws.cell(row=3, column=i, value=h)
+            c = ws.cell(row=start_row, column=i, value=h)
             c.font = white_bold; c.fill = dark_fill
             c.alignment = center; c.border = bdr
-            ws.column_dimensions[get_column_letter(i)].width = col_widths[i-1]
-        ws.row_dimensions[3].height = 18
+        ws.row_dimensions[start_row].height = 16
+        start_row += 1
 
-        for idx, r in enumerate(rows):
-            row_num = idx + 4
+        usd_fill_s = PatternFill("solid", fgColor=usd_fg)
+        usd_font_s = Font(name="Arial", bold=True, size=9, color=usd_color)
+
+        for idx, r in enumerate(section_rows):
+            row_num = start_row + idx
             is_alt  = idx % 2 == 1
             bg = gray_fill if is_alt else white_fill
 
@@ -453,74 +480,119 @@ def generar_excel(sources, year, month):
             except: cell(6, "")
             try:
                 c = ws.cell(row=row_num, column=7, value=float(r["usd"] or 0))
-                c.font = usd_font; c.fill = usd_fill
+                c.font = usd_font_s; c.fill = usd_fill_s
                 c.alignment = right; c.number_format = num_usd; c.border = usd_bdr
             except: ws.cell(row=row_num, column=7, value="")
             ws.row_dimensions[row_num].height = 15
 
-        # Subtotal row
-        sub_row = len(rows) + 4
-        ws.row_dimensions[sub_row].height = 18
-        for col in range(1, 7):
-            c = ws.cell(row=sub_row, column=col, value="")
-            c.fill = sub_fill; c.border = bdr
-        ws.cell(row=sub_row, column=1, value=f"SUBTOTAL {name.upper()}").font = sub_font
-        ws.cell(row=sub_row, column=1).fill = sub_fill
-        ws.cell(row=sub_row, column=1).alignment = center
-        c = ws.cell(row=sub_row, column=7, value=f"=SUM(G4:G{sub_row-1})")
-        c.font = sub_font; c.fill = sub_fill
-        c.alignment = right; c.number_format = num_usd
-        c.border = Border(left=med, right=thin, top=red_s, bottom=red_s)
-        ws.freeze_panes = "A4"
+        return start_row + len(section_rows)
 
-    # ── Consolidated sheet ────────────────────
-    wc = wb.create_sheet("Consolidated")
-    wc.column_dimensions["A"].width = 28
-    wc.column_dimensions["B"].width = 22
+    # ── Main sheet ───────────────────────────
+    ws = wb.active
+    ws.title = "Cash Ledger"
 
-    wc.merge_cells("A1:B1")
-    c = wc.cell(row=1, column=1, value=f"LCC — Cash Ledger Consolidated   |   {periodo}")
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.merge_cells("A1:G1")
+    ws["A1"] = f"LCC — Cash Ledger (Cuba)   |   Period: {periodo}"
+    ws["A1"].font = white_bold; ws["A1"].fill = dark_fill; ws["A1"].alignment = center
+    ws.row_dimensions[1].height = 22
+
+    ws.merge_cells("A2:G2")
+    ws["A2"] = "Expense & Income review — for Rolando's approval"
+    ws["A2"].font = Font(name="Arial", size=9, color="888888", italic=True)
+    ws["A2"].alignment = center; ws.row_dimensions[2].height = 16
+
+    current_row = 4
+    current_row = write_section(ws, income_rows,  current_row, "INCOME",   green_fill, "0F6E56", "F0FFF8")
+    # Subtotal income
+    ws.row_dimensions[current_row].height = 16
+    for col in range(1, 7):
+        c = ws.cell(row=current_row, column=col, value="")
+        c.fill = PatternFill("solid", fgColor="E8F8F3"); c.border = bdr
+    ws.cell(row=current_row, column=1, value="Total Income").font = Font(name="Arial", bold=True, size=9, color="0F6E56")
+    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="E8F8F3")
+    ws.cell(row=current_row, column=1).alignment = center
+    c = ws.cell(row=current_row, column=7, value=f"=SUM(G4:G{current_row-1})")
+    c.font = Font(name="Arial", bold=True, size=9, color="0F6E56")
+    c.fill = PatternFill("solid", fgColor="E8F8F3")
+    c.alignment = right; c.number_format = num_usd
+    current_row += 2
+
+    exp_start = current_row
+    current_row = write_section(ws, expense_rows, current_row, "EXPENSES", red_fill,   "A32D2D", "FFF0F0")
+    # Subtotal expenses
+    ws.row_dimensions[current_row].height = 16
+    for col in range(1, 7):
+        c = ws.cell(row=current_row, column=col, value="")
+        c.fill = PatternFill("solid", fgColor="FFE8E8"); c.border = bdr
+    ws.cell(row=current_row, column=1, value="Total Expenses").font = Font(name="Arial", bold=True, size=9, color="A32D2D")
+    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="FFE8E8")
+    ws.cell(row=current_row, column=1).alignment = center
+    c = ws.cell(row=current_row, column=7, value=f"=SUM(G{exp_start+2}:G{current_row-1})")
+    c.font = Font(name="Arial", bold=True, size=9, color="A32D2D")
+    c.fill = PatternFill("solid", fgColor="FFE8E8")
+    c.alignment = right; c.number_format = num_usd
+    current_row += 2
+
+    # Net row
+    net_color = "0F6E56" if net >= 0 else "A32D2D"
+    ws.row_dimensions[current_row].height = 20
+    ws.merge_cells(f"A{current_row}:F{current_row}")
+    c = ws.cell(row=current_row, column=1, value="NET CASH FLOW (Income − Expenses)")
+    c.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+    c.fill = PatternFill("solid", fgColor="1A1A2E"); c.alignment = center
+    c = ws.cell(row=current_row, column=7, value=net)
+    c.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+    c.fill = PatternFill("solid", fgColor=net_color)
+    c.alignment = right; c.number_format = num_usd
+
+    ws.freeze_panes = "A4"
+
+    # ── Approval sheet ───────────────────────
+    wa = wb.create_sheet("Approval")
+    wa.column_dimensions["A"].width = 28
+    wa.column_dimensions["B"].width = 22
+
+    wa.merge_cells("A1:B1")
+    c = wa.cell(row=1, column=1, value=f"LCC — Cash Ledger Approval   |   {periodo}")
     c.font = white_bold; c.fill = dark_fill; c.alignment = center
-    wc.row_dimensions[1].height = 28
+    wa.row_dimensions[1].height = 28
 
-    row = 3
-    for name, rows in sources:
-        sub = sum(float(r["usd"] or 0) for r in rows)
-        wc.row_dimensions[row].height = 18
-        c1 = wc.cell(row=row, column=1, value=name)
-        c1.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
-        c1.fill = sec_fill; c1.alignment = left
-        c2 = wc.cell(row=row, column=2, value=sub)
-        c2.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
-        c2.fill = sec_fill; c2.alignment = right; c2.number_format = num_usd
-        row += 1
+    for row, label, val, color in [
+        (3, "Period",               periodo,         "1A1A2E"),
+        (4, "Total Income (USD)",   total_in,        "0F6E56"),
+        (5, "Total Expenses (USD)", total_exp,       "A32D2D"),
+        (6, "Net Cash Flow (USD)",  net,             "0F6E56" if net>=0 else "A32D2D"),
+        (7, "No. of Transactions",  len(all_rows),   "1A1A2E"),
+    ]:
+        wa.row_dimensions[row].height = 18
+        c1 = wa.cell(row=row, column=1, value=label)
+        c1.font = Font(name="Arial", bold=True, size=10, color="555555")
+        c1.fill = gray_fill; c1.alignment = left
+        c2 = wa.cell(row=row, column=2, value=val)
+        c2.font = Font(name="Arial", bold=True, size=10, color=color)
+        c2.fill = gray_fill; c2.alignment = right
+        if isinstance(val, float): c2.number_format = num_usd
 
-    wc.row_dimensions[row].height = 20
-    c1 = wc.cell(row=row, column=1, value="GRAND TOTAL")
-    c1.font = total_font; c1.fill = total_fill; c1.alignment = left
-    c2 = wc.cell(row=row, column=2, value=grand_total)
-    c2.font = total_font; c2.fill = total_fill
-    c2.alignment = right; c2.number_format = num_usd
-    row += 2
-
-    # Approval block
-    wc.merge_cells(f"A{row}:B{row}")
-    c = wc.cell(row=row, column=1,
+    wa.row_dimensions[8].height = 10
+    wa.merge_cells("A9:B9")
+    c = wa.cell(row=9, column=1,
         value=f"Reviewed and approved. I confirm the transactions recorded in this Cash Ledger for {periodo} are accurate and complete.")
     c.font = Font(name="Arial", size=10, italic=True, color="333333")
     c.alignment = Alignment(wrap_text=True, vertical="center")
-    wc.row_dimensions[row].height = 32
-    row += 2
+    wa.row_dimensions[9].height = 32
+    wa.row_dimensions[10].height = 10
 
-    for label, val in [("Approved by:", ""), ("Name:", ""), ("Signature:", ""), ("Date:", "")]:
-        wc.row_dimensions[row].height = 22
-        wc.cell(row=row, column=1, value=label).font = Font(name="Arial", bold=True, size=10)
-        wc.cell(row=row, column=1).fill = gray2_fill
-        c = wc.cell(row=row, column=2, value=val)
+    for row, label, val in [(11,"Approved by:",""), (12,"Name:",""), (13,"Signature:",""), (14,"Date:","")]:
+        wa.row_dimensions[row].height = 22
+        wa.cell(row=row, column=1, value=label).font = Font(name="Arial", bold=True, size=10)
+        wa.cell(row=row, column=1).fill = gray2_fill
+        c = wa.cell(row=row, column=2, value=val)
         c.font = Font(name="Arial", size=10); c.fill = gray2_fill
-        if label in ("Signature:", "Date:"):
+        if label in ("Name:", "Signature:", "Date:"):
             c.border = Border(bottom=Side(style="medium", color="1A1A2E"))
-        row += 1
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -534,7 +606,7 @@ st.set_page_config(page_title="Cash Ledger LCC", page_icon="📊", layout="cente
 st.markdown("<style>.block-container { max-width: 780px; }</style>", unsafe_allow_html=True)
 
 st.markdown("## 📊 Cash Ledger — LCC Cuba")
-st.markdown("Upload the Excel file, select a month, and download the PDF or Excel for Rolando's review.")
+st.markdown("Upload the Excel file, select one or more months, and download the PDF or Excel for Rolando's review.")
 st.divider()
 
 uploaded_file = st.file_uploader("Upload Cash Ledger (.xlsx)", type=["xlsx"])
@@ -547,64 +619,91 @@ if uploaded_file:
         if not grupos:
             st.error("No transactions found in the file.")
         else:
-            opciones = {f"{MONTHS[m]} {y}": (y, m) for (y, m) in sorted(grupos.keys())}
-            mes_sel  = st.selectbox("Select month", list(opciones.keys()))
-            year, month = opciones[mes_sel]
-            rows = grupos[(year, month)]
-            total = sum(float(r["usd"] or 0) for r in rows)
+            year = list(grupos.keys())[0][0]
+            month_options = {MONTHS[m]: m for (y, m) in sorted(grupos.keys())}
 
-            col1, col2 = st.columns(2)
-            col1.metric("Total Expenses (USD)", f"${total:,.2f}")
-            col2.metric("Transactions", len(rows))
+            selected_labels = st.multiselect(
+                "Select month(s)",
+                options=list(month_options.keys()),
+                default=[list(month_options.keys())[0]]
+            )
 
-            st.divider()
+            if not selected_labels:
+                st.info("Please select at least one month.")
+            else:
+                selected_months = [month_options[l] for l in selected_labels]
+                rows_by_month   = {m: grupos[(year, m)] for m in selected_months if (year, m) in grupos}
+                all_rows        = [r for rows in rows_by_month.values() for r in rows]
+                income_rows     = [r for r in all_rows if is_income(r)]
+                expense_rows    = [r for r in all_rows if is_expense(r)]
+                total_in        = sum(float(r["usd"] or 0) for r in income_rows)
+                total_exp       = sum(float(r["usd"] or 0) for r in expense_rows)
+                net             = total_in - total_exp
 
-            with st.expander("View transactions", expanded=True):
-                preview = [{
-                    "Date":         _fecha(r),
-                    "Property":     _prop(r["prop"]),
-                    "Category":     r["cat"],
-                    "Description":  r["desc"],
-                    "Currency":     r["cur"],
-                    "Local Amount": fmt_local(r),
-                    "USD":          f'${float(r["usd"] or 0):,.2f}',
-                } for r in rows]
-                st.dataframe(preview, use_container_width=True, hide_index=True)
+                # Metrics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Income (USD)",   f"${total_in:,.2f}")
+                col2.metric("Total Expenses (USD)", f"${total_exp:,.2f}")
+                net_label = f"${abs(net):,.2f} {'▲' if net>=0 else '▼'}"
+                col3.metric("Net Cash Flow", net_label, delta_color="normal")
 
-            st.divider()
-            st.markdown("**Download files**")
+                st.divider()
 
-            # Single source — pass as list for PDF/Excel generators
-            sources = [("Cuba", rows)]
-            tz      = pytz.timezone("America/Toronto")
-            ts      = datetime.now(tz).strftime("%Y%m%d_%H%M")
-            mes_str = MONTHS[month]
-            base    = f"SS_CashLedger_Cuba_{mes_str}{year}_{ts}"
+                # Preview
+                if income_rows:
+                    with st.expander(f"💚 Income — {len(income_rows)} transactions", expanded=False):
+                        st.dataframe([{
+                            "Date": _fecha(r), "Property": _prop(r["prop"]),
+                            "Category": r["cat"], "Description": r["desc"],
+                            "Currency": r["cur"], "Local Amount": fmt_local(r),
+                            "USD": f'${float(r["usd"] or 0):,.2f}',
+                        } for r in income_rows], use_container_width=True, hide_index=True)
 
-            col_pdf, col_xlsx = st.columns(2)
+                if expense_rows:
+                    with st.expander(f"🔴 Expenses — {len(expense_rows)} transactions", expanded=True):
+                        st.dataframe([{
+                            "Date": _fecha(r), "Property": _prop(r["prop"]),
+                            "Category": r["cat"], "Description": r["desc"],
+                            "Currency": r["cur"], "Local Amount": fmt_local(r),
+                            "USD": f'${float(r["usd"] or 0):,.2f}',
+                        } for r in expense_rows], use_container_width=True, hide_index=True)
 
-            with col_pdf:
-                pdf_buf = generar_pdf(sources, year, month)
-                st.download_button(
-                    label="📄 Download PDF",
-                    data=pdf_buf,
-                    file_name=f"{base}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
+                st.divider()
+                st.markdown("**Download files**")
 
-            with col_xlsx:
-                xl_buf = generar_excel(sources, year, month)
-                st.download_button(
-                    label="📊 Download Excel",
-                    data=xl_buf,
-                    file_name=f"{base}_Review.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+                tz  = pytz.timezone("America/Toronto")
+                ts  = datetime.now(tz).strftime("%Y%m%d_%H%M")
+                if len(selected_months) == 1:
+                    period_str = f"{MONTHS[selected_months[0]]}{year}"
+                else:
+                    period_str = f"{MONTHS[selected_months[0]]}-{MONTHS[selected_months[-1]]}{year}"
+                base = f"SS_CashLedger_Cuba_{period_str}_{ts}"
+
+                col_pdf, col_xlsx = st.columns(2)
+
+                with col_pdf:
+                    pdf_buf = generar_pdf(rows_by_month, selected_months, year)
+                    st.download_button(
+                        label="📄 Download PDF",
+                        data=pdf_buf,
+                        file_name=f"{base}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+
+                with col_xlsx:
+                    xl_buf = generar_excel(rows_by_month, selected_months, year)
+                    st.download_button(
+                        label="📊 Download Excel",
+                        data=xl_buf,
+                        file_name=f"{base}_Review.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
 
     except Exception as e:
         st.error(f"Error reading the file: {e}")
+        st.exception(e)
 
 else:
     st.info("Upload the Excel file to get started.")
