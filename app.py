@@ -674,9 +674,11 @@ if uploaded_file:
                 tz  = pytz.timezone("America/Toronto")
                 ts  = datetime.now(tz).strftime("%Y%m%d_%H%M")
                 if len(selected_months) == 1:
-                    period_str = f"{MONTHS[selected_months[0]]}{year}"
+                    m = selected_months[0]
+                    period_str = f"{m:02d}_{MONTHS[m]}{year}"
                 else:
-                    period_str = f"{MONTHS[selected_months[0]]}-{MONTHS[selected_months[-1]]}{year}"
+                    m0, m1 = selected_months[0], selected_months[-1]
+                    period_str = f"{m0:02d}-{m1:02d}_{MONTHS[m0]}-{MONTHS[m1]}{year}"
                 base = f"SS_CashLedger_Cuba_{period_str}_{ts}"
 
                 col_pdf, col_xlsx = st.columns(2)
