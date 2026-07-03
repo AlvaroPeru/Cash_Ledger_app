@@ -22,12 +22,12 @@ MONTHS = {
 INCOME_TYPES  = {"cash income", "funding"}
 EXPENSE_TYPES = {"expense", "return cash"}
 
-DARK  = colors.HexColor("#1a1a2e")
+DARK  = colors.HexColor("#2C3E50")
 GBGD  = colors.HexColor("#f5f5f5")
 GBRD  = colors.HexColor("#e8e8e8")
 MID   = colors.HexColor("#666670")
-RED   = colors.HexColor("#a32d2d")
-GREEN = colors.HexColor("#0f6e56")
+RED   = colors.HexColor("#C0392B")
+GREEN = colors.HexColor("#2E7D6B")
 
 
 # ─── HELPERS ────────────────────────────────
@@ -155,7 +155,7 @@ def make_tx_table(rows, header_color=None):
         ("TEXTCOLOR",     (6,1),(6,-1),  RED),
         ("FONTNAME",      (6,1),(6,-1),  "Helvetica-Bold"),
         ("ALIGN",         (6,1),(6,-1),  "RIGHT"),
-        ("BACKGROUND",    (6,1),(6,-1),  colors.HexColor("#fff5f5")),
+        ("BACKGROUND",    (6,1),(6,-1),  colors.HexColor("#FDF3F3")),
         ("LINEAFTER",     (5,0),(5,-1),  0.8, colors.HexColor("#aaaaaa")),
         ("ALIGN",         (4,1),(4,-1),  "CENTER"),
         ("GRID",          (0,0),(-1,-1), 0.3, GBRD),
@@ -206,7 +206,7 @@ def subtotal_bar(label, amount, color, styles):
 
 def net_bar(net, styles):
     is_pos = net >= 0
-    color  = GREEN if is_pos else RED
+    color  = colors.HexColor("#2E7D6B") if is_pos else colors.HexColor("#B85450")
     label  = "NET CASH FLOW (Income − Expenses):"
     s = ParagraphStyle("net", parent=styles["Normal"], fontSize=10,
                        fontName="Helvetica-Bold", textColor=colors.white)
@@ -278,9 +278,9 @@ def generar_pdf(rows_by_month, selected_months, year):
         [Paragraph("Total Income (USD)", sm_s),
          Paragraph("Total Expenses (USD)", sm_s),
          Paragraph("Net Cash Flow", sm_s)],
-        [Paragraph(f'<font color="#0f6e56"><b>{_fmt(total_in)}</b></font>', styles["Normal"]),
-         Paragraph(f'<font color="#a32d2d"><b>{_fmt(total_exp)}</b></font>', styles["Normal"]),
-         Paragraph(f'<font color="{"#0f6e56" if net>=0 else "#a32d2d"}"><b>{_fmt(abs(net))} {"▲" if net>=0 else "▼"}</b></font>', styles["Normal"])],
+        [Paragraph(f'<font color="#2E7D6B"><b>{_fmt(total_in)}</b></font>', styles["Normal"]),
+         Paragraph(f'<font color="#C0392B"><b>{_fmt(total_exp)}</b></font>', styles["Normal"]),
+         Paragraph(f'<font color="{"#2E7D6B" if net>=0 else "#C0392B"}"><b>{_fmt(abs(net))} {"▲" if net>=0 else "▼"}</b></font>', styles["Normal"])],
     ], colWidths=["33%","33%","34%"])
     strip.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), GBGD),
@@ -296,9 +296,9 @@ def generar_pdf(rows_by_month, selected_months, year):
     if income_rows:
         story.append(Spacer(1, 12))
         story.append(section_banner("INCOME", len(income_rows), _fmt(total_in),
-                                    colors.HexColor("#0f6e56"), styles))
+                                    colors.HexColor("#2E7D6B"), styles))
         story.append(Spacer(1, 4))
-        story.append(make_tx_table(income_rows, colors.HexColor("#0f6e56")))
+        story.append(make_tx_table(income_rows, colors.HexColor("#2E7D6B")))
         story.append(subtotal_bar("Total Income:", total_in, GREEN, styles))
 
     # ── EXPENSES SECTION ──
@@ -406,21 +406,21 @@ def generar_excel(rows_by_month, selected_months, year):
 
     wb = Workbook()
 
-    dark_fill  = PatternFill("solid", fgColor="1A1A2E")
-    green_fill = PatternFill("solid", fgColor="0F6E56")
-    red_fill   = PatternFill("solid", fgColor="A32D2D")
-    net_fill   = PatternFill("solid", fgColor="0F6E56" if net >= 0 else "A32D2D")
+    dark_fill  = PatternFill("solid", fgColor="2C3E50")
+    green_fill = PatternFill("solid", fgColor="3D7A6A")
+    red_fill   = PatternFill("solid", fgColor="B85450")
+    net_fill   = PatternFill("solid", fgColor="3D7A6A" if net >= 0 else "B85450")
     gray_fill  = PatternFill("solid", fgColor="F5F5F5")
     gray2_fill = PatternFill("solid", fgColor="EBEBEB")
-    usd_fill   = PatternFill("solid", fgColor="FFF0F0")
-    inc_fill   = PatternFill("solid", fgColor="F0FFF8")
+    usd_fill   = PatternFill("solid", fgColor="FDF3F3")
+    inc_fill   = PatternFill("solid", fgColor="F2FAF7")
     white_fill = PatternFill("solid", fgColor="FFFFFF")
 
     white_bold = Font(name="Arial", bold=True, color="FFFFFF", size=11)
     normal     = Font(name="Arial", size=9)
     mid_font   = Font(name="Arial", size=9, color="888888")
-    usd_font   = Font(name="Arial", bold=True, size=9, color="A32D2D")
-    inc_font   = Font(name="Arial", bold=True, size=9, color="0F6E56")
+    usd_font   = Font(name="Arial", bold=True, size=9, color="B85450")
+    inc_font   = Font(name="Arial", bold=True, size=9, color="3D7A6A")
     tot_font   = Font(name="Arial", bold=True, size=10, color="FFFFFF")
 
     thin  = Side(style="thin",   color="DDDDDD")
@@ -505,44 +505,44 @@ def generar_excel(rows_by_month, selected_months, year):
     ws["A2"].alignment = center; ws.row_dimensions[2].height = 16
 
     current_row = 4
-    current_row = write_section(ws, income_rows,  current_row, "INCOME",   green_fill, "0F6E56", "F0FFF8")
+    current_row = write_section(ws, income_rows,  current_row, "INCOME",   green_fill, "3D7A6A", "F2FAF7")
     # Subtotal income
     ws.row_dimensions[current_row].height = 16
     for col in range(1, 7):
         c = ws.cell(row=current_row, column=col, value="")
-        c.fill = PatternFill("solid", fgColor="E8F8F3"); c.border = bdr
-    ws.cell(row=current_row, column=1, value="Total Income").font = Font(name="Arial", bold=True, size=9, color="0F6E56")
-    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="E8F8F3")
+        c.fill = PatternFill("solid", fgColor="EBF5F1"); c.border = bdr
+    ws.cell(row=current_row, column=1, value="Total Income").font = Font(name="Arial", bold=True, size=9, color="3D7A6A")
+    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="EBF5F1")
     ws.cell(row=current_row, column=1).alignment = center
     c = ws.cell(row=current_row, column=7, value=f"=SUM(G4:G{current_row-1})")
-    c.font = Font(name="Arial", bold=True, size=9, color="0F6E56")
-    c.fill = PatternFill("solid", fgColor="E8F8F3")
+    c.font = Font(name="Arial", bold=True, size=9, color="3D7A6A")
+    c.fill = PatternFill("solid", fgColor="EBF5F1")
     c.alignment = right; c.number_format = num_usd
     current_row += 2
 
     exp_start = current_row
-    current_row = write_section(ws, expense_rows, current_row, "EXPENSES", red_fill,   "A32D2D", "FFF0F0")
+    current_row = write_section(ws, expense_rows, current_row, "EXPENSES", red_fill,   "B85450", "FDF3F3")
     # Subtotal expenses
     ws.row_dimensions[current_row].height = 16
     for col in range(1, 7):
         c = ws.cell(row=current_row, column=col, value="")
-        c.fill = PatternFill("solid", fgColor="FFE8E8"); c.border = bdr
-    ws.cell(row=current_row, column=1, value="Total Expenses").font = Font(name="Arial", bold=True, size=9, color="A32D2D")
-    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="FFE8E8")
+        c.fill = PatternFill("solid", fgColor="F9ECEC"); c.border = bdr
+    ws.cell(row=current_row, column=1, value="Total Expenses").font = Font(name="Arial", bold=True, size=9, color="B85450")
+    ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="F9ECEC")
     ws.cell(row=current_row, column=1).alignment = center
     c = ws.cell(row=current_row, column=7, value=f"=SUM(G{exp_start+2}:G{current_row-1})")
-    c.font = Font(name="Arial", bold=True, size=9, color="A32D2D")
-    c.fill = PatternFill("solid", fgColor="FFE8E8")
+    c.font = Font(name="Arial", bold=True, size=9, color="B85450")
+    c.fill = PatternFill("solid", fgColor="F9ECEC")
     c.alignment = right; c.number_format = num_usd
     current_row += 2
 
     # Net row
-    net_color = "0F6E56" if net >= 0 else "A32D2D"
+    net_color = "3D7A6A" if net >= 0 else "B85450"
     ws.row_dimensions[current_row].height = 20
     ws.merge_cells(f"A{current_row}:F{current_row}")
     c = ws.cell(row=current_row, column=1, value="NET CASH FLOW (Income − Expenses)")
     c.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
-    c.fill = PatternFill("solid", fgColor="1A1A2E"); c.alignment = center
+    c.fill = PatternFill("solid", fgColor="2C3E50"); c.alignment = center
     c = ws.cell(row=current_row, column=7, value=net)
     c.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
     c.fill = PatternFill("solid", fgColor=net_color)
@@ -561,11 +561,11 @@ def generar_excel(rows_by_month, selected_months, year):
     wa.row_dimensions[1].height = 28
 
     for row, label, val, color in [
-        (3, "Period",               periodo,         "1A1A2E"),
-        (4, "Total Income (USD)",   total_in,        "0F6E56"),
-        (5, "Total Expenses (USD)", total_exp,       "A32D2D"),
-        (6, "Net Cash Flow (USD)",  net,             "0F6E56" if net>=0 else "A32D2D"),
-        (7, "No. of Transactions",  len(all_rows),   "1A1A2E"),
+        (3, "Period",               periodo,         "2C3E50"),
+        (4, "Total Income (USD)",   total_in,        "3D7A6A"),
+        (5, "Total Expenses (USD)", total_exp,       "B85450"),
+        (6, "Net Cash Flow (USD)",  net,             "3D7A6A" if net>=0 else "B85450"),
+        (7, "No. of Transactions",  len(all_rows),   "2C3E50"),
     ]:
         wa.row_dimensions[row].height = 18
         c1 = wa.cell(row=row, column=1, value=label)
@@ -592,7 +592,7 @@ def generar_excel(rows_by_month, selected_months, year):
         c = wa.cell(row=row, column=2, value=val)
         c.font = Font(name="Arial", size=10); c.fill = gray2_fill
         if label in ("Name:", "Signature:", "Date:"):
-            c.border = Border(bottom=Side(style="medium", color="1A1A2E"))
+            c.border = Border(bottom=Side(style="medium", color="2C3E50"))
 
     buf = io.BytesIO()
     wb.save(buf)
