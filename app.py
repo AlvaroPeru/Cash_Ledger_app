@@ -63,16 +63,28 @@ def is_outflow(r):
 def leer_excel(file):
     wb = openpyxl.load_workbook(file, data_only=True)
     ws = next((wb[s] for s in wb.sheetnames if "cash" in s.lower()), wb.active)
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
+    all_rows = list(ws.iter_rows(values_only=True))
+    if not all_rows:
         raise ValueError("The file appears to be empty.")
 
+    # Extract opening/closing balance from metadata rows
+    opening_bal = None
+    closing_bal = None
+    for r in all_rows[:10]:
+        for i, cell in enumerate(r):
+            if str(cell or "").strip() == "Opening Balance" and i+1 < len(r):
+                try: opening_bal = float(r[i+1])
+                except: pass
+            if str(cell or "").strip() == "Closing Balance" and i+1 < len(r):
+                try: closing_bal = float(r[i+1])
+                except: pass
+
     header_idx = 0
-    for i, r in enumerate(rows):
+    for i, r in enumerate(all_rows):
         if any(str(c or "").strip().lower() in ("year","month","date","description") for c in r):
             header_idx = i
             break
-    rows = rows[header_idx:]
+    rows = all_rows[header_idx:]
     hdrs = [str(h or "").strip().lower() for h in rows[0]]
 
     def col(name):
@@ -112,7 +124,7 @@ def leer_excel(file):
             "prop":  str(r[ci["prop"]]  or "").strip() if ci["prop"]  is not None else "",
             "type":  str(r[ci["type"]]  or "").strip() if ci["type"]  is not None else "",
         })
-    return data
+    return data, opening_bal, closing_bal
 
 
 def agrupar(data):
@@ -614,8 +626,7 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     net          = total_in - total_out
 
     # Get opening/closing balance from first/last row
-    opening_bal = float(all_rows[0]["bal"] or 0) if all_rows and all_rows[0]["bal"] else None
-    closing_bal = float(all_rows[-1]["bal"] or 0) if all_rows and all_rows[-1]["bal"] else None
+    # opening_bal and closing_bal passed as parameters
 
     # Monthly breakdown
     monthly = {}
@@ -753,7 +764,7 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
 
 # ─── GENERADOR SUMMARY PDF ──────────────────
 
-def generar_summary_pdf(rows_by_month, selected_months, year):
+def generar_summary_pdf(rows_by_month, selected_months, year, opening_bal=None, closing_bal=None):
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors as rl_colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -767,8 +778,7 @@ def generar_summary_pdf(rows_by_month, selected_months, year):
     total_out    = sum(float(r["usd"] or 0) for r in outflow_rows)
     net          = total_in - total_out
 
-    opening_bal = float(all_rows[0]["bal"] or 0) if all_rows and all_rows[0]["bal"] else None
-    closing_bal = float(all_rows[-1]["bal"] or 0) if all_rows and all_rows[-1]["bal"] else None
+    # opening_bal and closing_bal passed as parameters
 
     monthly = {}
     for m in selected_months:
@@ -817,9 +827,11 @@ def generar_summary_pdf(rows_by_month, selected_months, year):
     # Opening / Closing
     if opening_bal is not None and closing_bal is not None:
         def bal_cell(label, val):
+            sign = "" if val >= 0 else "-"
+            color = "#2E7D6B" if val >= 0 else "#B85450"
             return [
                 Paragraph(label, S("bl", fontSize=8, textColor=MID)),
-                Paragraph(f"<font color='{'#2E7D6B' if val>=0 else '#B85450'}'><b>${val:,.2f}</b></font>",
+                Paragraph(f"<font color='{color}'><b>{sign}${abs(val):,.2f}</b></font>",
                           S("bv", fontSize=16, fontName="Helvetica-Bold")),
             ]
         bal = Table([[
@@ -836,14 +848,15 @@ def generar_summary_pdf(rows_by_month, selected_months, year):
     # Totals strip
     nc_hex = "#2E7D6B" if net >= 0 else "#B85450"
     def strip_cell(label, val, hex_c):
+        sign = "" if val >= 0 else "-"
         return [
             Paragraph(label, S("sl", fontSize=8, textColor=MID, alignment=1)),
-            Paragraph(f"<font color='{hex_c}'><b>${abs(val):,.2f}</b></font>",
+            Paragraph(f"<font color='{hex_c}'><b>{sign}${abs(val):,.2f}</b></font>",
                       S("sv", fontSize=13, fontName="Helvetica-Bold", alignment=1)),
         ]
     strip = Table([[
-        Table([strip_cell("Total Inflows",  total_in,  "#2E7D6B")], colWidths=["100%"]),
-        Table([strip_cell("Total Outflows", total_out, "#B85450")], colWidths=["100%"]),
+        Table([strip_cell("Total Inflows",  total_in,   "#2E7D6B")], colWidths=["100%"]),
+        Table([strip_cell("Total Outflows", -total_out, "#B85450")], colWidths=["100%"]),
         Table([strip_cell("Net Cash Flow",  net,       nc_hex)],    colWidths=["100%"]),
     ]], colWidths=["33%","33%","34%"])
     strip.setStyle(TableStyle([
@@ -865,8 +878,8 @@ def generar_summary_pdf(rows_by_month, selected_months, year):
         rows_tbl.append([
             Paragraph(month, td_l),
             Paragraph(f"${v['inflows']:,.2f}", td_g),
-            Paragraph(f"${v['outflows']:,.2f}", td_r),
-            Paragraph(f"${abs(v['net']):,.2f}", nc2),
+            Paragraph(f"-${v['outflows']:,.2f}", td_r),
+            Paragraph(f"{'- ' if v['net'] < 0 else ''}${abs(v['net']):,.2f}", nc2),
         ])
 
     tbl = Table(rows_tbl, colWidths=["25%","25%","25%","25%"], repeatRows=1)
@@ -910,7 +923,7 @@ uploaded_file = st.file_uploader("Upload Cash Ledger (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
     try:
-        data   = leer_excel(uploaded_file)
+        data, opening_bal, closing_bal = leer_excel(uploaded_file)
         grupos = agrupar(data)
 
         if not grupos:
@@ -1001,7 +1014,7 @@ if uploaded_file:
                     )
 
                 with col_sum:
-                    sum_pdf_buf = generar_summary_pdf(rows_by_month, selected_months, year)
+                    sum_pdf_buf = generar_summary_pdf(rows_by_month, selected_months, year, opening_bal, closing_bal)
                     st.download_button(
                         label="📋 Executive Summary",
                         data=sum_pdf_buf,
