@@ -651,14 +651,14 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     try:
         fb = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         fr = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        font_title  = ImageFont.truetype(fb, 22)
-        font_sub    = ImageFont.truetype(fr, 14)
-        font_label  = ImageFont.truetype(fr, 12)
-        font_bold   = ImageFont.truetype(fb, 16)
-        font_number = ImageFont.truetype(fb, 20)
-        font_small  = ImageFont.truetype(fr, 11)
-        font_xlarge = ImageFont.truetype(fb, 24)
-        font_strip  = ImageFont.truetype(fb, 22)
+        font_title  = ImageFont.truetype(fb, 32)
+        font_sub    = ImageFont.truetype(fr, 20)
+        font_label  = ImageFont.truetype(fr, 16)
+        font_bold   = ImageFont.truetype(fb, 18)
+        font_number = ImageFont.truetype(fb, 30)
+        font_small  = ImageFont.truetype(fr, 16)
+        font_xlarge = ImageFont.truetype(fb, 30)
+        font_strip  = ImageFont.truetype(fb, 30)
     except:
         font_title = font_sub = font_label = font_bold = font_number = font_small = font_xlarge = font_strip = ImageFont.load_default()
 
