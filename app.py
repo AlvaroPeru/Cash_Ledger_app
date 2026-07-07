@@ -742,7 +742,7 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
 
     # Footer
     draw.line([(PAD, y4), (W-PAD, y4)], fill=C_BORDER, width=1)
-    tc("Monthly certification by Rolando  |  LCC Finance & Reporting", W//2, y4+16, font_label, C_MID, "center")
+    tc("LCC Finance & Reporting", W//2, y4+16, font_label, C_MID, "center")
     draw.rounded_rectangle([1,1,W-2,H-2], radius=10, outline=C_BORDER, width=2)
 
     buf = io.BytesIO()
