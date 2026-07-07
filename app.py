@@ -750,6 +750,153 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     buf.seek(0)
     return buf
 
+
+# ─── GENERADOR SUMMARY PDF ──────────────────
+
+def generar_summary_pdf(rows_by_month, selected_months, year):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+
+    all_rows     = [r for rows in rows_by_month.values() for r in rows]
+    inflow_rows  = [r for r in all_rows if is_inflow(r)]
+    outflow_rows = [r for r in all_rows if is_outflow(r)]
+    total_in     = sum(float(r["usd"] or 0) for r in inflow_rows)
+    total_out    = sum(float(r["usd"] or 0) for r in outflow_rows)
+    net          = total_in - total_out
+
+    opening_bal = float(all_rows[0]["bal"] or 0) if all_rows and all_rows[0]["bal"] else None
+    closing_bal = float(all_rows[-1]["bal"] or 0) if all_rows and all_rows[-1]["bal"] else None
+
+    monthly = {}
+    for m in selected_months:
+        rows = rows_by_month.get(m, [])
+        monthly[MONTHS[m]] = {
+            "inflows":  sum(float(r["usd"] or 0) for r in rows if is_inflow(r)),
+            "outflows": sum(float(r["usd"] or 0) for r in rows if is_outflow(r)),
+        }
+        monthly[MONTHS[m]]["net"] = monthly[MONTHS[m]]["inflows"] - monthly[MONTHS[m]]["outflows"]
+
+    if len(selected_months) == 1:
+        periodo = f"{MONTHS[selected_months[0]]} {year}"
+        open_lbl = f"Opening Balance ({MONTHS[selected_months[0]]} {year})"
+        close_lbl = f"Closing Balance ({MONTHS[selected_months[-1]]} {year})"
+    else:
+        periodo = f"{MONTHS[selected_months[0]]} - {MONTHS[selected_months[-1]]} {year}"
+        open_lbl = f"Opening Balance ({MONTHS[selected_months[0]]} {year})"
+        close_lbl = f"Closing Balance ({MONTHS[selected_months[-1]]} {year})"
+
+    DARK  = rl_colors.HexColor("#2C3E50"); GRN = rl_colors.HexColor("#2E7D6B")
+    RED   = rl_colors.HexColor("#B85450"); LGT = rl_colors.HexColor("#F5F7FA")
+    MID   = rl_colors.HexColor("#666670"); AMB = rl_colors.HexColor("#B87820")
+    AMBBG = rl_colors.HexColor("#FFFAE8"); BDR = rl_colors.HexColor("#D8DEE6")
+
+    styles = getSampleStyleSheet()
+    def S(name, **kw): return ParagraphStyle(name, parent=styles["Normal"], **kw)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+        leftMargin=0.6*inch, rightMargin=0.6*inch,
+        topMargin=0.5*inch, bottomMargin=0.5*inch)
+    story = []
+
+    # Header
+    hdr = Table([[
+        Paragraph("LCC — Cuba Cash Ledger", S("h", fontSize=17, fontName="Helvetica-Bold", textColor=rl_colors.white)),
+        Paragraph(f"Executive Summary<br/>{periodo}", S("hs", fontSize=9, textColor=rl_colors.HexColor("#c0ccd8"), alignment=2)),
+    ]], colWidths=["60%","40%"])
+    hdr.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),DARK),("TOPPADDING",(0,0),(-1,-1),12),
+        ("BOTTOMPADDING",(0,0),(-1,-1),12),("LEFTPADDING",(0,0),(0,-1),14),
+        ("RIGHTPADDING",(-1,0),(-1,-1),14),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story.append(hdr); story.append(Spacer(1,8))
+
+    # Opening / Closing
+    if opening_bal is not None and closing_bal is not None:
+        def bal_cell(label, val):
+            return [
+                Paragraph(label, S("bl", fontSize=8, textColor=MID)),
+                Paragraph(f"<font color='{'#2E7D6B' if val>=0 else '#B85450'}'><b>${val:,.2f}</b></font>",
+                          S("bv", fontSize=16, fontName="Helvetica-Bold")),
+            ]
+        bal = Table([[
+            Table([bal_cell(open_lbl,  opening_bal)], colWidths=["100%"]),
+            Table([bal_cell(close_lbl, closing_bal)], colWidths=["100%"]),
+        ]], colWidths=["50%","50%"])
+        bal.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),LGT),("BOX",(0,0),(-1,-1),0.5,BDR),
+            ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+            ("LEFTPADDING",(0,0),(-1,-1),14),("LINEAFTER",(0,0),(0,-1),0.5,BDR),
+        ]))
+        story.append(bal); story.append(Spacer(1,6))
+
+    # Totals strip
+    nc_hex = "#2E7D6B" if net >= 0 else "#B85450"
+    def strip_cell(label, val, hex_c):
+        return [
+            Paragraph(label, S("sl", fontSize=8, textColor=MID, alignment=1)),
+            Paragraph(f"<font color='{hex_c}'><b>${abs(val):,.2f}</b></font>",
+                      S("sv", fontSize=13, fontName="Helvetica-Bold", alignment=1)),
+        ]
+    strip = Table([[
+        Table([strip_cell("Total Inflows",  total_in,  "#2E7D6B")], colWidths=["100%"]),
+        Table([strip_cell("Total Outflows", total_out, "#B85450")], colWidths=["100%"]),
+        Table([strip_cell("Net Cash Flow",  net,       nc_hex)],    colWidths=["100%"]),
+    ]], colWidths=["33%","33%","34%"])
+    strip.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),LGT),("BOX",(0,0),(-1,-1),0.5,BDR),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("LINEAFTER",(0,0),(1,-1),0.5,BDR),
+    ]))
+    story.append(strip); story.append(Spacer(1,10))
+
+    # Monthly table
+    th   = S("th",  fontSize=11, fontName="Helvetica-Bold", textColor=rl_colors.white, alignment=1)
+    td_l = S("tdl", fontSize=12, fontName="Helvetica-Bold", textColor=rl_colors.HexColor("#2C3E50"))
+    td_g = S("tdg", fontSize=12, fontName="Helvetica-Bold", textColor=rl_colors.HexColor("#2E7D6B"), alignment=2)
+    td_r = S("tdr", fontSize=12, fontName="Helvetica-Bold", textColor=rl_colors.HexColor("#B85450"), alignment=2)
+
+    rows_tbl = [[Paragraph(h, th) for h in ["Month","Inflows","Outflows","Net"]]]
+    for month, v in monthly.items():
+        nc2 = td_g if v["net"] >= 0 else td_r
+        rows_tbl.append([
+            Paragraph(month, td_l),
+            Paragraph(f"${v['inflows']:,.2f}", td_g),
+            Paragraph(f"${v['outflows']:,.2f}", td_r),
+            Paragraph(f"${abs(v['net']):,.2f}", nc2),
+        ])
+
+    tbl = Table(rows_tbl, colWidths=["25%","25%","25%","25%"], repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),DARK),
+        ("ROWBACKGROUNDS",(0,1),(-1,-1),[LGT,rl_colors.white]),
+        ("GRID",(0,0),(-1,-1),0.3,BDR),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("LEFTPADDING",(0,0),(-1,-1),12),("RIGHTPADDING",(0,0),(-1,-1),12),
+    ]))
+    story.append(tbl); story.append(Spacer(1,8))
+
+    if closing_bal is not None and closing_bal < 0:
+        warn = Table([[Paragraph(
+            "! Cash balance is negative. Funding recommended to restore a minimum reserve of $300-$500 USD.",
+            S("w", fontSize=9, textColor=AMB))]])
+        warn.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),AMBBG),("BOX",(0,0),(-1,-1),1,rl_colors.HexColor("#D4A820")),
+            ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+            ("LEFTPADDING",(0,0),(-1,-1),12),
+        ]))
+        story.append(warn); story.append(Spacer(1,8))
+
+    story.append(HRFlowable(width="100%", thickness=0.5, color=BDR, spaceAfter=4))
+    story.append(Paragraph("LCC Finance & Reporting", S("ft", fontSize=8, textColor=MID, alignment=1)))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
+
 # ─── STREAMLIT UI ───────────────────────────
 
 st.set_page_config(page_title="Cash Ledger LCC", page_icon="📊", layout="centered")
@@ -831,7 +978,7 @@ if uploaded_file:
                     period_str = f"{m0:02d}-{m1:02d}_{MONTHS[m0]}-{MONTHS[m1]}{year}"
                 base = f"SS_CashLedger_Cuba_{period_str}_{ts}"
 
-                col_pdf, col_xlsx, col_img = st.columns(3)
+                col_pdf, col_xlsx, col_sum = st.columns(3)
 
                 with col_pdf:
                     pdf_buf = generar_pdf(rows_by_month, selected_months, year)
@@ -853,13 +1000,13 @@ if uploaded_file:
                         use_container_width=True,
                     )
 
-                with col_img:
-                    img_buf = generar_summary_jpg(rows_by_month, selected_months, year)
+                with col_sum:
+                    sum_pdf_buf = generar_summary_pdf(rows_by_month, selected_months, year)
                     st.download_button(
-                        label="🖼️ Download Summary",
-                        data=img_buf,
-                        file_name=f"{base}_Summary.jpg",
-                        mime="image/jpeg",
+                        label="📋 Executive Summary",
+                        data=sum_pdf_buf,
+                        file_name=f"{base}_ExecutiveSummary.pdf",
+                        mime="application/pdf",
                         use_container_width=True,
                     )
 
