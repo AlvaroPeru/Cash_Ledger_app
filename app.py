@@ -644,21 +644,21 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     C_AMBER_BR = (210, 170, 80)
     C_AMBER_TX = (130, 80, 10)
 
-    W, H = 2400, 300 + 180 + 180 + len(monthly)*110 + 180 + 120
+    W, H = 900, 120 + 70 + 80 + len(monthly)*50 + 70 + 60
     img  = Image.new("RGB", (W, H), C_WHITE)
     draw = ImageDraw.Draw(img)
 
     try:
         fb = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         fr = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        font_title  = ImageFont.truetype(fb, 60)
-        font_sub    = ImageFont.truetype(fr, 42)
-        font_label  = ImageFont.truetype(fr, 36)
-        font_bold   = ImageFont.truetype(fb, 48)
-        font_number = ImageFont.truetype(fb, 56)
-        font_small  = ImageFont.truetype(fr, 32)
-        font_xlarge = ImageFont.truetype(fb, 64)
-        font_strip  = ImageFont.truetype(fb, 60)
+        font_title  = ImageFont.truetype(fb, 22)
+        font_sub    = ImageFont.truetype(fr, 14)
+        font_label  = ImageFont.truetype(fr, 12)
+        font_bold   = ImageFont.truetype(fb, 16)
+        font_number = ImageFont.truetype(fb, 20)
+        font_small  = ImageFont.truetype(fr, 11)
+        font_xlarge = ImageFont.truetype(fb, 24)
+        font_strip  = ImageFont.truetype(fb, 22)
     except:
         font_title = font_sub = font_label = font_bold = font_number = font_small = font_xlarge = font_strip = ImageFont.load_default()
 
