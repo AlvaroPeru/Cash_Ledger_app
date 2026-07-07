@@ -210,7 +210,7 @@ def net_bar(net, styles):
     label  = "NET CASH FLOW (Income − Expenses):"
     s = ParagraphStyle("net", parent=styles["Normal"], fontSize=10,
                        fontName="Helvetica-Bold", textColor=colors.white)
-    tbl = Table([[Paragraph(label, s), Paragraph(_fmt(abs(net)) + (" ▲" if is_pos else " ▼"), s)]],
+    tbl = Table([[Paragraph(label, s), Paragraph(_fmt(abs(net)), s)]],
                 colWidths=[5.0*inch, 2.0*inch])
     tbl.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), color),
@@ -280,7 +280,7 @@ def generar_pdf(rows_by_month, selected_months, year):
          Paragraph("Net Cash Flow", sm_s)],
         [Paragraph(f'<font color="#2E7D6B"><b>{_fmt(total_in)}</b></font>', styles["Normal"]),
          Paragraph(f'<font color="#C0392B"><b>{_fmt(total_out)}</b></font>', styles["Normal"]),
-         Paragraph(f'<font color="{"#2E7D6B" if net>=0 else "#C0392B"}"><b>{_fmt(abs(net))} {"▲" if net>=0 else "▼"}</b></font>', styles["Normal"])],
+         Paragraph(f'<font color="{"#2E7D6B" if net>=0 else "#C0392B"}"><b>{_fmt(abs(net))} {"^" if net>=0 else "v"}</b></font>', styles["Normal"])],
     ], colWidths=["33%","33%","34%"])
     strip.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), GBGD),
@@ -631,7 +631,7 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     if len(selected_months) == 1:
         periodo = f"{MONTHS[selected_months[0]]} {year}"
     else:
-        periodo = f"{MONTHS[selected_months[0]]} – {MONTHS[selected_months[-1]]} {year}"
+        periodo = f"{MONTHS[selected_months[0]]} - {MONTHS[selected_months[-1]]} {year}"
 
     C_DARK     = (44, 62, 80)
     C_WHITE    = (255, 255, 255)
@@ -644,21 +644,21 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     C_AMBER_BR = (210, 170, 80)
     C_AMBER_TX = (130, 80, 10)
 
-    W, H = 1600, 200 + 140 + 140 + len(monthly)*86 + 140 + 100
+    W, H = 2400, 300 + 180 + 180 + len(monthly)*110 + 180 + 120
     img  = Image.new("RGB", (W, H), C_WHITE)
     draw = ImageDraw.Draw(img)
 
     try:
         fb = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         fr = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        font_title  = ImageFont.truetype(fb, 44)
-        font_sub    = ImageFont.truetype(fr, 30)
-        font_label  = ImageFont.truetype(fr, 26)
-        font_bold   = ImageFont.truetype(fb, 36)
-        font_number = ImageFont.truetype(fb, 44)
-        font_small  = ImageFont.truetype(fr, 24)
-        font_xlarge = ImageFont.truetype(fb, 50)
-        font_strip  = ImageFont.truetype(fb, 46)
+        font_title  = ImageFont.truetype(fb, 60)
+        font_sub    = ImageFont.truetype(fr, 42)
+        font_label  = ImageFont.truetype(fr, 36)
+        font_bold   = ImageFont.truetype(fb, 48)
+        font_number = ImageFont.truetype(fb, 56)
+        font_small  = ImageFont.truetype(fr, 32)
+        font_xlarge = ImageFont.truetype(fb, 64)
+        font_strip  = ImageFont.truetype(fb, 60)
     except:
         font_title = font_sub = font_label = font_bold = font_number = font_small = font_xlarge = font_strip = ImageFont.load_default()
 
@@ -678,25 +678,25 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     PAD = 50
 
     # Header
-    rect(0, 0, W, 100, C_DARK)
-    tc("LCC — Cuba Cash Ledger", W//2, 18, font_title, C_WHITE, "center")
-    tc(f"Executive Summary  |  {periodo}", W//2, 62, font_sub, (180,195,210), "center")
+    rect(0, 0, W, 140, C_DARK)
+    tc("LCC  Cuba Cash Ledger", W//2, 24, font_title, C_WHITE, "center")
+    tc(f"Executive Summary  |  {periodo}", W//2, 90, font_sub, (180,195,210), "center")
 
     # Opening / Closing
-    y0 = 120
+    y0 = 160
     bw = (W - PAD*2 - 20) // 2
     if opening_bal is not None:
-        outline_rect(PAD, y0, bw, 90, C_LIGHT, C_BORDER)
-        tc(f"Opening Balance  ({MONTHS[selected_months[0]]} {year})", PAD+20, y0+12, font_label, C_MID)
-        tc(f"${opening_bal:,.2f}", PAD+20, y0+42, font_xlarge, C_RED if opening_bal < 0 else C_GREEN)
+        outline_rect(PAD, y0, bw, 120, C_LIGHT, C_BORDER)
+        tc(f"Opening Balance  ({MONTHS[selected_months[0]]} {year})", PAD+24, y0+14, font_label, C_MID)
+        tc(f"${opening_bal:,.2f}", PAD+24, y0+56, font_xlarge, C_RED if opening_bal < 0 else C_GREEN)
     if closing_bal is not None:
         x2 = PAD + bw + 20
-        outline_rect(x2, y0, bw, 90, C_LIGHT, C_BORDER)
-        tc(f"Closing Balance  ({MONTHS[selected_months[-1]]} {year})", x2+20, y0+12, font_label, C_MID)
-        tc(f"${closing_bal:,.2f}", x2+20, y0+42, font_xlarge, C_RED if closing_bal < 0 else C_GREEN)
+        outline_rect(x2, y0, bw, 120, C_LIGHT, C_BORDER)
+        tc(f"Closing Balance  ({MONTHS[selected_months[-1]]} {year})", x2+24, y0+14, font_label, C_MID)
+        tc(f"${closing_bal:,.2f}", x2+24, y0+56, font_xlarge, C_RED if closing_bal < 0 else C_GREEN)
 
     # Strip totals
-    y1 = 234
+    y1 = 370
     cw = (W - PAD*2 - 40) // 3
     strips = [
         ("Total Inflows",  total_in,  C_GREEN),
@@ -705,38 +705,38 @@ def generar_summary_jpg(rows_by_month, selected_months, year):
     ]
     for i, (label, val, color) in enumerate(strips):
         x = PAD + i*(cw+20)
-        outline_rect(x, y1, cw, 100, C_LIGHT, C_BORDER)
-        tc(label, x+cw//2, y1+12, font_label, C_MID, "center")
-        sign = "▲" if val >= 0 else "▼"
-        tc(f"${abs(val):,.2f} {sign}", x+cw//2, y1+48, font_strip, color, "center")
+        outline_rect(x, y1, cw, 130, C_LIGHT, C_BORDER)
+        tc(label, x+cw//2, y1+16, font_label, C_MID, "center")
+        sign = "^" if val >= 0 else "v"
+        tc(f"${abs(val):,.2f} {sign}", x+cw//2, y1+62, font_strip, color, "center")
 
     # Monthly table
-    y2 = 358
-    row_h = 86
-    rect(PAD, y2, W-PAD*2, 44, C_DARK, radius=6)
-    cx = [PAD+24, PAD+380, PAD+760, PAD+1140]
+    y2 = 570
+    row_h = 110
+    rect(PAD, y2, W-PAD*2, 60, C_DARK, radius=6)
+    cx = [PAD+40, PAD+600, PAD+1200, PAD+1800]
     for lbl, x in zip(["Month", "Inflows", "Outflows", "Net"], cx):
-        tc(lbl, x, y2+10, font_bold, C_WHITE)
+        tc(lbl, x, y2+14, font_bold, C_WHITE)
 
     for idx, (month, d) in enumerate(monthly.items()):
-        ry = y2 + 44 + idx*row_h
+        ry = y2 + 60 + idx*row_h
         bg = C_LIGHT if idx % 2 == 0 else C_WHITE
         rect(PAD, ry, W-PAD*2, row_h, bg, radius=0)
         draw.line([(PAD, ry+row_h), (W-PAD, ry+row_h)], fill=C_BORDER, width=1)
         nc = C_GREEN if d["net"] >= 0 else C_RED
-        ns = "▲" if d["net"] >= 0 else "▼"
-        tc(month,                            cx[0], ry+16, font_bold,   C_DARK)
-        tc(f"${d['inflows']:,.2f}",         cx[1], ry+16, font_number, C_GREEN)
-        tc(f"${d['outflows']:,.2f}",        cx[2], ry+16, font_number, C_RED)
-        tc(f"${abs(d['net']):,.2f} {ns}",   cx[3], ry+16, font_number, nc)
+        ns = "^" if d["net"] >= 0 else "v"
+        tc(month,                            cx[0], ry+22, font_bold,   C_DARK)
+        tc(f"${d['inflows']:,.2f}",         cx[1], ry+22, font_number, C_GREEN)
+        tc(f"${d['outflows']:,.2f}",        cx[2], ry+22, font_number, C_RED)
+        tc(f"${abs(d['net']):,.2f} {ns}",   cx[3], ry+22, font_number, nc)
 
     # Warning if negative
-    y3 = y2 + 44 + len(monthly)*row_h + 24
+    y3 = y2 + 60 + len(monthly)*row_h + 30
     if closing_bal is not None and closing_bal < 0:
-        outline_rect(PAD, y3, W-PAD*2, 72, C_AMBER_BG, C_AMBER_BR, radius=8, width=2)
-        tc("⚠  Cash balance is negative.", PAD+22, y3+12, font_bold, C_AMBER_TX)
-        tc("   Funding recommended to restore a minimum reserve of $300–$500 USD.", PAD+22, y3+40, font_label, C_AMBER_TX)
-        y4 = y3 + 96
+        outline_rect(PAD, y3, W-PAD*2, 100, C_AMBER_BG, C_AMBER_BR, radius=8, width=2)
+        tc("!  Cash balance is negative.", PAD+28, y3+16, font_bold, C_AMBER_TX)
+        tc("   Funding recommended to restore a minimum reserve of $300-$500 USD.", PAD+28, y3+58, font_label, C_AMBER_TX)
+        y4 = y3 + 120
     else:
         y4 = y3
 
