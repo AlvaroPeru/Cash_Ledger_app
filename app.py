@@ -19,8 +19,8 @@ MONTHS = {
     9:"September",10:"October",11:"November",12:"December"
 }
 
-INCOME_TYPES  = {"cash income", "funding"}
-EXPENSE_TYPES = {"expense", "return cash"}
+INFLOW_TYPES  = {"cash income", "funding"}
+OUTFLOW_TYPES = {"expense", "return cash"}
 
 DARK  = colors.HexColor("#2C3E50")
 GBGD  = colors.HexColor("#f5f5f5")
@@ -51,11 +51,11 @@ def fmt_local(r):
     except:
         return ""
 
-def is_income(r):
-    return str(r.get("type","")).strip().lower() in INCOME_TYPES
+def is_inflow(r):
+    return str(r.get("type","")).strip().lower() in INFLOW_TYPES
 
-def is_expense(r):
-    return str(r.get("type","")).strip().lower() in EXPENSE_TYPES
+def is_outflow(r):
+    return str(r.get("type","")).strip().lower() in OUTFLOW_TYPES
 
 
 # ─── LECTURA ────────────────────────────────
@@ -227,11 +227,11 @@ def net_bar(net, styles):
 
 def generar_pdf(rows_by_month, selected_months, year):
     all_rows    = [r for rows in rows_by_month.values() for r in rows]
-    income_rows = [r for r in all_rows if is_income(r)]
-    expense_rows= [r for r in all_rows if is_expense(r)]
-    total_in    = sum(float(r["usd"] or 0) for r in income_rows)
-    total_exp   = sum(float(r["usd"] or 0) for r in expense_rows)
-    net         = total_in - total_exp
+    inflow_rows = [r for r in all_rows if is_inflow(r)]
+    outflow_rows= [r for r in all_rows if is_outflow(r)]
+    total_in    = sum(float(r["usd"] or 0) for r in inflow_rows)
+    total_out   = sum(float(r["usd"] or 0) for r in outflow_rows)
+    net         = total_in - total_out
 
     if len(selected_months) == 1:
         m = selected_months[0]
@@ -275,11 +275,11 @@ def generar_pdf(rows_by_month, selected_months, year):
 
     # Summary strip
     strip = Table([
-        [Paragraph("Total Income (USD)", sm_s),
-         Paragraph("Total Expenses (USD)", sm_s),
+        [Paragraph("Total Inflows (USD)", sm_s),
+         Paragraph("Total Outflows (USD)", sm_s),
          Paragraph("Net Cash Flow", sm_s)],
         [Paragraph(f'<font color="#2E7D6B"><b>{_fmt(total_in)}</b></font>', styles["Normal"]),
-         Paragraph(f'<font color="#C0392B"><b>{_fmt(total_exp)}</b></font>', styles["Normal"]),
+         Paragraph(f'<font color="#C0392B"><b>{_fmt(total_out)}</b></font>', styles["Normal"]),
          Paragraph(f'<font color="{"#2E7D6B" if net>=0 else "#C0392B"}"><b>{_fmt(abs(net))} {"▲" if net>=0 else "▼"}</b></font>', styles["Normal"])],
     ], colWidths=["33%","33%","34%"])
     strip.setStyle(TableStyle([
@@ -293,22 +293,22 @@ def generar_pdf(rows_by_month, selected_months, year):
     story.append(strip)
 
     # ── INCOME SECTION ──
-    if income_rows:
+    if inflow_rows:
         story.append(Spacer(1, 12))
-        story.append(section_banner("INCOME", len(income_rows), _fmt(total_in),
+        story.append(section_banner("INFLOWS", len(inflow_rows), _fmt(total_in),
                                     colors.HexColor("#2E7D6B"), styles))
         story.append(Spacer(1, 4))
-        story.append(make_tx_table(income_rows, colors.HexColor("#2E7D6B")))
-        story.append(subtotal_bar("Total Income:", total_in, GREEN, styles))
+        story.append(make_tx_table(inflow_rows, colors.HexColor("#2E7D6B")))
+        story.append(subtotal_bar("Total Inflows:", total_in, GREEN, styles))
 
     # ── EXPENSES SECTION ──
-    if expense_rows:
+    if outflow_rows:
         story.append(Spacer(1, 12))
-        story.append(section_banner("EXPENSES", len(expense_rows), _fmt(total_exp),
+        story.append(section_banner("OUTFLOWS", len(outflow_rows), _fmt(total_out),
                                     RED, styles))
         story.append(Spacer(1, 4))
-        story.append(make_tx_table(expense_rows, RED))
-        story.append(subtotal_bar("Total Expenses:", total_exp, RED, styles))
+        story.append(make_tx_table(outflow_rows, RED))
+        story.append(subtotal_bar("Total Outflows:", total_out, RED, styles))
 
     # ── NET ──
     story.append(Spacer(1, 10))
@@ -322,8 +322,8 @@ def generar_pdf(rows_by_month, selected_months, year):
 
     recap = Table([
         ["Period",               periodo],
-        ["Total Income (USD)",   _fmt(total_in)],
-        ["Total Expenses (USD)", _fmt(total_exp)],
+        ["Total Inflows (USD)",   _fmt(total_in)],
+        ["Total Outflows (USD)", _fmt(total_out)],
         ["Net Cash Flow (USD)",  _fmt(net)],
         ["No. of Transactions",  str(len(all_rows))],
     ], colWidths=[3*inch, 2.5*inch])
@@ -391,11 +391,11 @@ def generar_excel(rows_by_month, selected_months, year):
     from openpyxl.utils import get_column_letter
 
     all_rows     = [r for rows in rows_by_month.values() for r in rows]
-    income_rows  = [r for r in all_rows if is_income(r)]
-    expense_rows = [r for r in all_rows if is_expense(r)]
-    total_in     = sum(float(r["usd"] or 0) for r in income_rows)
-    total_exp    = sum(float(r["usd"] or 0) for r in expense_rows)
-    net          = total_in - total_exp
+    inflow_rows  = [r for r in all_rows if is_inflow(r)]
+    outflow_rows = [r for r in all_rows if is_outflow(r)]
+    total_in     = sum(float(r["usd"] or 0) for r in inflow_rows)
+    total_out    = sum(float(r["usd"] or 0) for r in outflow_rows)
+    net          = total_in - total_out
 
     if len(selected_months) == 1:
         m = selected_months[0]
@@ -500,18 +500,18 @@ def generar_excel(rows_by_month, selected_months, year):
     ws.row_dimensions[1].height = 22
 
     ws.merge_cells("A2:G2")
-    ws["A2"] = "Expense & Income review — for Rolando's approval"
+    ws["A2"] = "Inflows & Outflows review — for Rolando's approval"
     ws["A2"].font = Font(name="Arial", size=9, color="888888", italic=True)
     ws["A2"].alignment = center; ws.row_dimensions[2].height = 16
 
     current_row = 4
-    current_row = write_section(ws, income_rows,  current_row, "INCOME",   green_fill, "3D7A6A", "F2FAF7")
+    current_row = write_section(ws, inflow_rows,  current_row, "INFLOWS",   green_fill, "3D7A6A", "F2FAF7")
     # Subtotal income
     ws.row_dimensions[current_row].height = 16
     for col in range(1, 7):
         c = ws.cell(row=current_row, column=col, value="")
         c.fill = PatternFill("solid", fgColor="EBF5F1"); c.border = bdr
-    ws.cell(row=current_row, column=1, value="Total Income").font = Font(name="Arial", bold=True, size=9, color="3D7A6A")
+    ws.cell(row=current_row, column=1, value="Total Inflows").font = Font(name="Arial", bold=True, size=9, color="3D7A6A")
     ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="EBF5F1")
     ws.cell(row=current_row, column=1).alignment = center
     c = ws.cell(row=current_row, column=7, value=f"=SUM(G4:G{current_row-1})")
@@ -521,13 +521,13 @@ def generar_excel(rows_by_month, selected_months, year):
     current_row += 2
 
     exp_start = current_row
-    current_row = write_section(ws, expense_rows, current_row, "EXPENSES", red_fill,   "B85450", "FDF3F3")
+    current_row = write_section(ws, outflow_rows, current_row, "OUTFLOWS", red_fill,   "B85450", "FDF3F3")
     # Subtotal expenses
     ws.row_dimensions[current_row].height = 16
     for col in range(1, 7):
         c = ws.cell(row=current_row, column=col, value="")
         c.fill = PatternFill("solid", fgColor="F9ECEC"); c.border = bdr
-    ws.cell(row=current_row, column=1, value="Total Expenses").font = Font(name="Arial", bold=True, size=9, color="B85450")
+    ws.cell(row=current_row, column=1, value="Total Outflows").font = Font(name="Arial", bold=True, size=9, color="B85450")
     ws.cell(row=current_row, column=1).fill = PatternFill("solid", fgColor="F9ECEC")
     ws.cell(row=current_row, column=1).alignment = center
     c = ws.cell(row=current_row, column=7, value=f"=SUM(G{exp_start+2}:G{current_row-1})")
@@ -562,8 +562,8 @@ def generar_excel(rows_by_month, selected_months, year):
 
     for row, label, val, color in [
         (3, "Period",               periodo,         "2C3E50"),
-        (4, "Total Income (USD)",   total_in,        "3D7A6A"),
-        (5, "Total Expenses (USD)", total_exp,       "B85450"),
+        (4, "Total Inflows (USD)",   total_in,        "3D7A6A"),
+        (5, "Total Outflows (USD)", total_out,       "B85450"),
         (6, "Net Cash Flow (USD)",  net,             "3D7A6A" if net>=0 else "B85450"),
         (7, "No. of Transactions",  len(all_rows),   "2C3E50"),
     ]:
@@ -600,6 +600,156 @@ def generar_excel(rows_by_month, selected_months, year):
     return buf
 
 
+
+# ─── GENERADOR SUMMARY JPG ──────────────────
+
+def generar_summary_jpg(rows_by_month, selected_months, year):
+    from PIL import Image, ImageDraw, ImageFont
+
+    all_rows     = [r for rows in rows_by_month.values() for r in rows]
+    inflow_rows  = [r for r in all_rows if is_inflow(r)]
+    outflow_rows = [r for r in all_rows if is_outflow(r)]
+    total_in     = sum(float(r["usd"] or 0) for r in inflow_rows)
+    total_out    = sum(float(r["usd"] or 0) for r in outflow_rows)
+    net          = total_in - total_out
+
+    # Get opening/closing balance from first/last row
+    opening_bal = float(all_rows[0]["bal"] or 0) if all_rows and all_rows[0]["bal"] else None
+    closing_bal = float(all_rows[-1]["bal"] or 0) if all_rows and all_rows[-1]["bal"] else None
+
+    # Monthly breakdown
+    monthly = {}
+    for m in selected_months:
+        rows = rows_by_month.get(m, [])
+        monthly[MONTHS[m]] = {
+            "inflows":  sum(float(r["usd"] or 0) for r in rows if is_inflow(r)),
+            "outflows": sum(float(r["usd"] or 0) for r in rows if is_outflow(r)),
+            "net":      sum(float(r["usd"] or 0) for r in rows if is_inflow(r)) -
+                        sum(float(r["usd"] or 0) for r in rows if is_outflow(r)),
+        }
+
+    if len(selected_months) == 1:
+        periodo = f"{MONTHS[selected_months[0]]} {year}"
+    else:
+        periodo = f"{MONTHS[selected_months[0]]} – {MONTHS[selected_months[-1]]} {year}"
+
+    C_DARK     = (44, 62, 80)
+    C_WHITE    = (255, 255, 255)
+    C_LIGHT    = (245, 247, 250)
+    C_BORDER   = (210, 218, 226)
+    C_GREEN    = (46, 125, 107)
+    C_RED      = (184, 84, 80)
+    C_MID      = (100, 106, 112)
+    C_AMBER_BG = (255, 250, 235)
+    C_AMBER_BR = (210, 170, 80)
+    C_AMBER_TX = (130, 80, 10)
+
+    W, H = 1200, 200 + 110 + 120 + len(monthly)*66 + 120 + 80
+    img  = Image.new("RGB", (W, H), C_WHITE)
+    draw = ImageDraw.Draw(img)
+
+    try:
+        fb = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        fr = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        font_title  = ImageFont.truetype(fb, 34)
+        font_sub    = ImageFont.truetype(fr, 22)
+        font_label  = ImageFont.truetype(fr, 20)
+        font_bold   = ImageFont.truetype(fb, 28)
+        font_number = ImageFont.truetype(fb, 34)
+        font_small  = ImageFont.truetype(fr, 18)
+        font_xlarge = ImageFont.truetype(fb, 38)
+        font_strip  = ImageFont.truetype(fb, 36)
+    except:
+        font_title = font_sub = font_label = font_bold = font_number = font_small = font_xlarge = font_strip = ImageFont.load_default()
+
+    def rect(x, y, w, h, color, radius=8):
+        draw.rounded_rectangle([x, y, x+w, y+h], radius=radius, fill=color)
+
+    def outline_rect(x, y, w, h, fill, border, radius=8, width=1):
+        draw.rounded_rectangle([x, y, x+w, y+h], radius=radius, fill=fill, outline=border, width=width)
+
+    def tc(txt, x, y, font, color, align="left"):
+        bbox = draw.textbbox((0,0), txt, font=font)
+        tw = bbox[2] - bbox[0]
+        if align == "center": x = x - tw//2
+        elif align == "right": x = x - tw
+        draw.text((x, y), txt, font=font, fill=color)
+
+    PAD = 50
+
+    # Header
+    rect(0, 0, W, 100, C_DARK)
+    tc("LCC — Cuba Cash Ledger", W//2, 18, font_title, C_WHITE, "center")
+    tc(f"Executive Summary  |  {periodo}", W//2, 62, font_sub, (180,195,210), "center")
+
+    # Opening / Closing
+    y0 = 120
+    bw = (W - PAD*2 - 20) // 2
+    if opening_bal is not None:
+        outline_rect(PAD, y0, bw, 90, C_LIGHT, C_BORDER)
+        tc(f"Opening Balance  ({MONTHS[selected_months[0]]} {year})", PAD+20, y0+12, font_label, C_MID)
+        tc(f"${opening_bal:,.2f}", PAD+20, y0+42, font_xlarge, C_RED if opening_bal < 0 else C_GREEN)
+    if closing_bal is not None:
+        x2 = PAD + bw + 20
+        outline_rect(x2, y0, bw, 90, C_LIGHT, C_BORDER)
+        tc(f"Closing Balance  ({MONTHS[selected_months[-1]]} {year})", x2+20, y0+12, font_label, C_MID)
+        tc(f"${closing_bal:,.2f}", x2+20, y0+42, font_xlarge, C_RED if closing_bal < 0 else C_GREEN)
+
+    # Strip totals
+    y1 = 234
+    cw = (W - PAD*2 - 40) // 3
+    strips = [
+        ("Total Inflows",  total_in,  C_GREEN),
+        ("Total Outflows", total_out, C_RED),
+        ("Net Cash Flow",  net,       C_GREEN if net >= 0 else C_RED),
+    ]
+    for i, (label, val, color) in enumerate(strips):
+        x = PAD + i*(cw+20)
+        outline_rect(x, y1, cw, 100, C_LIGHT, C_BORDER)
+        tc(label, x+cw//2, y1+12, font_label, C_MID, "center")
+        sign = "▲" if val >= 0 else "▼"
+        tc(f"${abs(val):,.2f} {sign}", x+cw//2, y1+48, font_strip, color, "center")
+
+    # Monthly table
+    y2 = 358
+    row_h = 66
+    rect(PAD, y2, W-PAD*2, 44, C_DARK, radius=6)
+    cx = [PAD+24, PAD+280, PAD+560, PAD+840]
+    for lbl, x in zip(["Month", "Inflows", "Outflows", "Net"], cx):
+        tc(lbl, x, y2+10, font_bold, C_WHITE)
+
+    for idx, (month, d) in enumerate(monthly.items()):
+        ry = y2 + 44 + idx*row_h
+        bg = C_LIGHT if idx % 2 == 0 else C_WHITE
+        rect(PAD, ry, W-PAD*2, row_h, bg, radius=0)
+        draw.line([(PAD, ry+row_h), (W-PAD, ry+row_h)], fill=C_BORDER, width=1)
+        nc = C_GREEN if d["net"] >= 0 else C_RED
+        ns = "▲" if d["net"] >= 0 else "▼"
+        tc(month,                            cx[0], ry+16, font_bold,   C_DARK)
+        tc(f"${d['inflows']:,.2f}",         cx[1], ry+16, font_number, C_GREEN)
+        tc(f"${d['outflows']:,.2f}",        cx[2], ry+16, font_number, C_RED)
+        tc(f"${abs(d['net']):,.2f} {ns}",   cx[3], ry+16, font_number, nc)
+
+    # Warning if negative
+    y3 = y2 + 44 + len(monthly)*row_h + 24
+    if closing_bal is not None and closing_bal < 0:
+        outline_rect(PAD, y3, W-PAD*2, 72, C_AMBER_BG, C_AMBER_BR, radius=8, width=2)
+        tc("⚠  Cash balance is negative.", PAD+22, y3+12, font_bold, C_AMBER_TX)
+        tc("   Funding recommended to restore a minimum reserve of $300–$500 USD.", PAD+22, y3+40, font_label, C_AMBER_TX)
+        y4 = y3 + 96
+    else:
+        y4 = y3
+
+    # Footer
+    draw.line([(PAD, y4), (W-PAD, y4)], fill=C_BORDER, width=1)
+    tc("Monthly certification by Rolando  |  LCC Finance & Reporting", W//2, y4+16, font_label, C_MID, "center")
+    draw.rounded_rectangle([1,1,W-2,H-2], radius=10, outline=C_BORDER, width=2)
+
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=95)
+    buf.seek(0)
+    return buf
+
 # ─── STREAMLIT UI ───────────────────────────
 
 st.set_page_config(page_title="Cash Ledger LCC", page_icon="📊", layout="centered")
@@ -634,39 +784,39 @@ if uploaded_file:
                 selected_months = [month_options[l] for l in selected_labels]
                 rows_by_month   = {m: grupos[(year, m)] for m in selected_months if (year, m) in grupos}
                 all_rows        = [r for rows in rows_by_month.values() for r in rows]
-                income_rows     = [r for r in all_rows if is_income(r)]
-                expense_rows    = [r for r in all_rows if is_expense(r)]
-                total_in        = sum(float(r["usd"] or 0) for r in income_rows)
-                total_exp       = sum(float(r["usd"] or 0) for r in expense_rows)
-                net             = total_in - total_exp
+                inflow_rows     = [r for r in all_rows if is_inflow(r)]
+                outflow_rows    = [r for r in all_rows if is_outflow(r)]
+                total_in        = sum(float(r["usd"] or 0) for r in inflow_rows)
+                total_out       = sum(float(r["usd"] or 0) for r in outflow_rows)
+                net             = total_in - total_out
 
                 # Metrics
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Total Income (USD)",   f"${total_in:,.2f}")
-                col2.metric("Total Expenses (USD)", f"${total_exp:,.2f}")
+                col1.metric("Total Inflows (USD)",   f"${total_in:,.2f}")
+                col2.metric("Total Outflows (USD)", f"${total_out:,.2f}")
                 net_label = f"${abs(net):,.2f} {'▲' if net>=0 else '▼'}"
                 col3.metric("Net Cash Flow", net_label, delta_color="normal")
 
                 st.divider()
 
                 # Preview
-                if income_rows:
-                    with st.expander(f"💚 Income — {len(income_rows)} transactions", expanded=False):
+                if inflow_rows:
+                    with st.expander(f"💚 Income — {len(inflow_rows)} transactions", expanded=False):
                         st.dataframe([{
                             "Date": _fecha(r), "Property": _prop(r["prop"]),
                             "Category": r["cat"], "Description": r["desc"],
                             "Currency": r["cur"], "Local Amount": fmt_local(r),
                             "USD": f'${float(r["usd"] or 0):,.2f}',
-                        } for r in income_rows], use_container_width=True, hide_index=True)
+                        } for r in inflow_rows], use_container_width=True, hide_index=True)
 
-                if expense_rows:
-                    with st.expander(f"🔴 Expenses — {len(expense_rows)} transactions", expanded=True):
+                if outflow_rows:
+                    with st.expander(f"🔴 Expenses — {len(outflow_rows)} transactions", expanded=True):
                         st.dataframe([{
                             "Date": _fecha(r), "Property": _prop(r["prop"]),
                             "Category": r["cat"], "Description": r["desc"],
                             "Currency": r["cur"], "Local Amount": fmt_local(r),
                             "USD": f'${float(r["usd"] or 0):,.2f}',
-                        } for r in expense_rows], use_container_width=True, hide_index=True)
+                        } for r in outflow_rows], use_container_width=True, hide_index=True)
 
                 st.divider()
                 st.markdown("**Download files**")
@@ -681,7 +831,7 @@ if uploaded_file:
                     period_str = f"{m0:02d}-{m1:02d}_{MONTHS[m0]}-{MONTHS[m1]}{year}"
                 base = f"SS_CashLedger_Cuba_{period_str}_{ts}"
 
-                col_pdf, col_xlsx = st.columns(2)
+                col_pdf, col_xlsx, col_img = st.columns(3)
 
                 with col_pdf:
                     pdf_buf = generar_pdf(rows_by_month, selected_months, year)
@@ -700,6 +850,16 @@ if uploaded_file:
                         data=xl_buf,
                         file_name=f"{base}_Review.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+
+                with col_img:
+                    img_buf = generar_summary_jpg(rows_by_month, selected_months, year)
+                    st.download_button(
+                        label="🖼️ Download Summary",
+                        data=img_buf,
+                        file_name=f"{base}_Summary.jpg",
+                        mime="image/jpeg",
                         use_container_width=True,
                     )
 
